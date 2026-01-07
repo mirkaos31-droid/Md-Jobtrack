@@ -1,4 +1,4 @@
-export type SessionType = 'work' | 'ord_2025' | 'ord_2026' | 'lic_937' | 'rec_fest' | 'rec_comp' | 'com_log';
+export type SessionType = 'work' | 'ord_2025' | 'ord_2026' | 'lic_937' | 'rec_fest' | 'rec_comp' | 'com_log' | 'operation';
 
 export interface WorkSession {
   id: string;
@@ -29,10 +29,12 @@ export interface LeaveBalances {
   lic_937: number;  // Initial budget in DAYS
   rec_fest: number; // Initial budget in DAYS
   com_log: number;  // Initial budget in HOURS
+  rec_comp: number; // Initial budget in HOURS (Overtime start)
 }
 
 export interface UserSettings {
   schedule: ScheduleSettings;
   leaveBalances: LeaveBalances; // Added balances
   hourlyRate?: number;
+  logoUrl?: string; // Base64 encoded image string
 }

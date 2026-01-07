@@ -46,10 +46,12 @@ export const getTargetHoursForDate = (dateString: string, settings: UserSettings
  * Calculates the total cumulative balance (Monte Ore).
  * 
  * Logic:
+ * 0. Start with Initial Rec. Comp. Balance from settings.
  * 1. 'work': Actual Duration - Target = Balance Change (Positive or Negative).
  * 2. 'ord', 'lic', 'rec_fest': Neutral (Balance Change = 0). It counts as a full day taken.
  * 3. 'com_log': Counts as 'Credited Hours' (like work) for the day, in hours.
  * 4. 'rec_comp': You are absent using overtime. Balance Change = -Target (e.g. -8.5h).
+ * 5. 'operation': Specific work outside normal scope. Neutral (Balance Change = 0). Does not scale standard hours.
  */
 export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSettings): number => {
   const sessionsByDay = new Map<string, WorkSession[]>();
@@ -64,7 +66,8 @@ export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSet
     sessionsByDay.get(dateKey)!.push(session);
   });
 
-  let balance = 0;
+  // Start with the initial balance set in settings
+  let balance = settings.leaveBalances?.rec_comp || 0;
 
   // 2. Iterate each day
   sessionsByDay.forEach((daySessions, dateStr) => {
@@ -73,9 +76,10 @@ export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSet
     // Check session types for this day
     const hasFullDayLeave = daySessions.some(s => ['ord_2025', 'ord_2026', 'lic_937', 'rec_fest'].includes(s.type));
     const hasRecComp = daySessions.some(s => s.type === 'rec_comp');
+    const hasOperation = daySessions.some(s => s.type === 'operation');
 
-    if (hasFullDayLeave) {
-      // If taking formal full-day leave, it neutralizes the target. Balance change is 0.
+    if (hasFullDayLeave || hasOperation) {
+      // If taking formal full-day leave OR doing an Operation, it neutralizes the target. Balance change is 0.
       balance += 0; 
     } else if (hasRecComp) {
       // If taking Compensatory Recovery, we deduct the full target from the balance.
@@ -113,7 +117,7 @@ export const calculateUsedLeave = (sessions: WorkSession[]) => {
   };
 
   sessions.forEach(s => {
-    if (s.type === 'work' || s.type === 'rec_comp') return;
+    if (s.type === 'work' || s.type === 'rec_comp' || s.type === 'operation') return;
     
     if (s.type === 'com_log') {
       if (s.endTime) {

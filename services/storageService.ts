@@ -15,8 +15,10 @@ const DEFAULT_SETTINGS: UserSettings = {
     ord_2026: 0,
     lic_937: 0,
     rec_fest: 0,
-    com_log: 0
-  }
+    com_log: 0,
+    rec_comp: 0
+  },
+  logoUrl: undefined
 };
 
 export const loadSessions = (): WorkSession[] => {
@@ -45,7 +47,7 @@ export const loadSettings = (): UserSettings => {
     
     const parsed = JSON.parse(data);
     
-    // Merge with defaults to ensure new fields (like leaveBalances) exist
+    // Merge with defaults to ensure new fields (like leaveBalances, logoUrl) exist
     return { 
       ...DEFAULT_SETTINGS, 
       ...parsed,

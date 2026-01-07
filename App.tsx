@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, TrendingUp, TrendingDown, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText } from 'lucide-react';
+import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, TrendingUp, TrendingDown, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck } from 'lucide-react';
 import { WorkSession, UserSettings, SessionType } from './types';
 import * as Storage from './services/storageService';
 import * as GeminiService from './services/geminiService';
@@ -11,17 +11,22 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [settings, setSettings] = useState<UserSettings>({ 
     schedule: { monThu: 8.5, fri: 4, satSun: 0 },
-    leaveBalances: { ord_2025: 0, ord_2026: 0, lic_937: 0, rec_fest: 0, com_log: 0 }
+    leaveBalances: { ord_2025: 0, ord_2026: 0, lic_937: 0, rec_fest: 0, com_log: 0, rec_comp: 0 }
   });
   
-  const [view, setView] = useState<'dashboard' | 'history' | 'settings'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'history' | 'operations' | 'settings'>('dashboard');
   
   // Manual Entry State
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  // Use 'fr-CA' locale hack to get YYYY-MM-DD in local time
+  const [entryDate, setEntryDate] = useState(new Date().toLocaleDateString('fr-CA'));
   const [entryStart, setEntryStart] = useState('08:00');
   const [entryEnd, setEntryEnd] = useState('16:30');
   const [entryType, setEntryType] = useState<SessionType>('work');
   const [entryActivity, setEntryActivity] = useState('');
+
+  // Operations Entry State
+  const [opDate, setOpDate] = useState(new Date().toLocaleDateString('fr-CA'));
+  const [opLocation, setOpLocation] = useState('');
 
   // UI State for Activity Editing / AI
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -36,6 +41,25 @@ const App: React.FC = () => {
     setSessions(loadedSessions);
     setSettings(loadedSettings);
   }, []);
+
+  // Update Favicon dynamically when logo settings change
+  useEffect(() => {
+    if (settings.logoUrl) {
+      const favicon = document.getElementById('dynamic-favicon') as HTMLLinkElement;
+      const appleIcon = document.getElementById('dynamic-apple-icon') as HTMLLinkElement;
+      
+      if (favicon) favicon.href = settings.logoUrl;
+      if (appleIcon) appleIcon.href = settings.logoUrl;
+    } else {
+      // Revert to default SVG if no logo
+      const defaultSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%232563eb'/%3E%3Cpath d='M25 35 L35 75 L50 45 L65 75 L75 35' fill='none' stroke='white' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
+      const favicon = document.getElementById('dynamic-favicon') as HTMLLinkElement;
+      const appleIcon = document.getElementById('dynamic-apple-icon') as HTMLLinkElement;
+      
+      if (favicon) favicon.href = defaultSvg;
+      if (appleIcon) appleIcon.href = defaultSvg;
+    }
+  }, [settings.logoUrl]);
 
   // Persist sessions whenever they change
   useEffect(() => {
@@ -71,7 +95,7 @@ const App: React.FC = () => {
        startDateTime = new Date(`${entryDate}T09:00:00`);
        endDateTime = new Date(`${entryDate}T09:00:00`);
     } else {
-      // Standard Full-Day Leave (Ord/Lic)
+      // Standard Full-Day Leave (Ord/Lic) or Operation
       const targetHours = DateService.getTargetHoursForDate(entryDate, settings);
       startDateTime = new Date(`${entryDate}T09:00:00`);
       endDateTime = new Date(startDateTime.getTime() + targetHours * 60 * 60 * 1000);
@@ -101,6 +125,31 @@ const App: React.FC = () => {
        } catch(e) { console.error(e) }
        setIsAiLoading(false);
     }
+  };
+
+  const handleAddOperation = () => {
+    if (!opDate || !opLocation) {
+        alert("Inserisci data e luogo.");
+        return;
+    }
+
+    // Operations are stored as full days (to mask default schedule) but with type 'operation'
+    // dateService.ts handles logic to NOT deduct hours from balance.
+    const startDateTime = new Date(`${opDate}T09:00:00`);
+    const endDateTime = new Date(`${opDate}T17:00:00`); // Dummy times
+
+    const newSession: WorkSession = {
+        id: crypto.randomUUID(),
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        type: 'operation',
+        activityRaw: opLocation,
+        activityRefined: opLocation,
+        tags: ['operation']
+    };
+
+    setSessions(prev => [...prev, newSession]);
+    setOpLocation('');
   };
 
   const handleSaveActivity = async (sessionId: string) => {
@@ -135,6 +184,23 @@ const App: React.FC = () => {
     setIsAiLoading(false);
   };
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      alert("L'immagine è troppo grande (Max 2MB).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setSettings(prev => ({ ...prev, logoUrl: base64String }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   // --- Derived Data ---
   
   const todayDateStr = new Date().toISOString();
@@ -153,6 +219,10 @@ const App: React.FC = () => {
   // Rec Fest: Initial + Earned (Working on Holidays) - Used
   const balanceRecFest = (settings.leaveBalances.rec_fest + earnedDays.rec_fest) - usedLeaveDays.rec_fest;
   const balanceComLog = (settings.leaveBalances.com_log || 0) - usedLeaveDays.com_log;
+  
+  // Operations Count
+  const operationsList = sessions.filter(s => s.type === 'operation').sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  const totalOperations = operationsList.length;
 
   // Grouped History for Display
   const sessionsByDay = sessions.reduce((acc, session) => {
@@ -180,6 +250,7 @@ const App: React.FC = () => {
       case 'rec_fest': return 'text-orange-700 bg-orange-50 border-orange-200';
       case 'com_log': return 'text-pink-700 bg-pink-50 border-pink-200';
       case 'rec_comp': return 'text-teal-700 bg-teal-50 border-teal-200';
+      case 'operation': return 'text-emerald-700 bg-emerald-50 border-emerald-200';
       default: return 'text-slate-700';
     }
   };
@@ -193,6 +264,7 @@ const App: React.FC = () => {
       case 'rec_fest': return 'Rec. Fest.';
       case 'com_log': return 'Com. Log.';
       case 'rec_comp': return 'Rec. Comp.';
+      case 'operation': return 'Operazione';
     }
   };
 
@@ -203,10 +275,18 @@ const App: React.FC = () => {
       <header className="bg-gradient-to-r from-blue-700 to-indigo-800 border-b border-indigo-900/10 sticky top-0 z-20 shadow-md">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-white/20 backdrop-blur-sm p-1.5 rounded-lg text-white">
-              <Clock size={20} strokeWidth={2.5} />
-            </div>
-            <h1 className="font-bold text-xl tracking-tight text-white">MD JobTrack</h1>
+            {settings.logoUrl ? (
+              <img 
+                src={settings.logoUrl} 
+                alt="Logo" 
+                className="w-9 h-9 rounded-lg object-cover bg-white shadow-sm"
+              />
+            ) : (
+              <div className="bg-white/20 backdrop-blur-sm p-1.5 rounded-lg text-white">
+                <Clock size={20} strokeWidth={2.5} />
+              </div>
+            )}
+            <h1 className="font-bold text-xl tracking-tight text-white">WorkLog</h1>
           </div>
           <div className="text-xs font-semibold px-2.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-blue-50 border border-white/10">
             {todayLocale}
@@ -453,7 +533,9 @@ const App: React.FC = () => {
                               {session.endTime ? new Date(session.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ' ...'}
                             </>
                           ) : (
-                            <span>Giornata Intera</span>
+                            <span>
+                                {session.type === 'operation' ? (session.activityRefined || session.activityRaw) : 'Giornata Intera'}
+                            </span>
                           )}
                         </div>
                         <div className="text-xs opacity-60 mt-0.5">
@@ -476,7 +558,7 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="relative">
-                       {editingSessionId === session.id ? (
+                       {editingSessionId === session.id && session.type !== 'operation' ? (
                          <div className="space-y-2 mt-2">
                            <textarea
                              value={activityText}
@@ -507,12 +589,13 @@ const App: React.FC = () => {
                        ) : (
                          <div 
                            onClick={() => {
+                             if(session.type === 'operation') return;
                              setEditingSessionId(session.id);
                              setActivityText(session.activityRefined || session.activityRaw);
                            }}
                            className={`text-sm cursor-pointer hover:bg-white/50 p-2 -ml-2 rounded-lg transition-colors break-words ${!session.activityRefined && !session.activityRaw ? 'opacity-50 italic' : 'opacity-80'}`}
                          >
-                           {session.activityRefined || session.activityRaw || "Nessuna nota"}
+                           {session.activityRefined || session.activityRaw || (session.type !== 'operation' ? "Nessuna nota" : "")}
                          </div>
                        )}
                     </div>
@@ -526,10 +609,143 @@ const App: React.FC = () => {
           </>
         )}
 
+        {/* --- OPERATIONS VIEW --- */}
+        {view === 'operations' && (
+            <div className="space-y-6">
+                
+                {/* Operations Header / Counter */}
+                <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl shadow-lg shadow-emerald-200 border border-emerald-400/20 p-6 text-white relative overflow-hidden">
+                  <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <MapPin size={24} className="text-emerald-100" />
+                    <span className="text-sm font-bold uppercase tracking-wider text-emerald-50">Totale Operazioni</span>
+                  </div>
+                  <div className="relative z-10">
+                    <div className="text-5xl font-bold text-white tracking-tight">{totalOperations}</div>
+                    <div className="text-sm text-emerald-100 mt-1">Missioni effettuate</div>
+                  </div>
+                </div>
+
+                {/* New Operation Card */}
+                <div className="bg-white rounded-2xl shadow-sm border border-emerald-200 ring-1 ring-emerald-50 p-5 md:p-6 relative">
+                  <h3 className="font-bold text-emerald-800 mb-5 flex items-center gap-2 border-b border-emerald-100 pb-3">
+                    <Plus size={20} className="text-emerald-600" /> Nuova Operazione
+                  </h3>
+                  
+                  <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Data Missione</label>
+                        <input 
+                            type="date" 
+                            value={opDate} 
+                            onChange={e => setOpDate(e.target.value)} 
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Luogo / Descrizione</label>
+                        <input 
+                            type="text" 
+                            value={opLocation} 
+                            onChange={e => setOpLocation(e.target.value)} 
+                            placeholder="Es. Trasferta Roma, Esercitazione..."
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                        />
+                      </div>
+
+                      <button 
+                        onClick={handleAddOperation}
+                        className="w-full text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-emerald-200 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
+                      >
+                        <Save size={18} /> Salva Operazione
+                      </button>
+                      <p className="text-xs text-emerald-600/80 text-center mt-2 flex items-center justify-center gap-1">
+                          <Info size={12} />
+                          Le operazioni non incidono sul Monte Ore ordinario.
+                      </p>
+                  </div>
+                </div>
+
+                {/* Operations List */}
+                <div className="space-y-3">
+                    <h3 className="font-semibold text-slate-800 ml-1">Storico Operazioni</h3>
+                    {operationsList.length > 0 ? (
+                        operationsList.map(op => (
+                            <div key={op.id} className="bg-white border border-emerald-100 rounded-xl p-4 flex items-center justify-between shadow-sm group">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="text-sm font-bold text-slate-800">{new Date(op.startTime).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                                        {DateService.isHoliday(new Date(op.startTime)) && <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold">FESTIVO</span>}
+                                    </div>
+                                    <div className="text-sm text-emerald-700 font-medium flex items-center gap-1.5">
+                                        <MapPin size={14} />
+                                        {op.activityRefined || op.activityRaw}
+                                    </div>
+                                </div>
+                                <button onClick={() => handleDeleteSession(op.id)} className="text-slate-300 hover:text-red-500 p-2">
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-10 text-slate-400 text-sm bg-slate-100/50 rounded-xl border border-slate-100 border-dashed">
+                            Nessuna operazione registrata.
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        )}
+
         {/* --- HISTORY VIEW --- */}
         {view === 'history' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-6">
             <h2 className="font-bold text-lg mb-6 flex items-center gap-2"><Calendar size={20} /> Storico Completo</h2>
+            
+            {/* Presence Summary Card */}
+            {(() => {
+                // Calculate unique presence days (work + operations + com_log)
+                const calculatePresence = (sess: WorkSession[]) => {
+                    const uniqueDays = new Set<string>();
+                    sess.forEach(s => {
+                        if (s.type === 'work' || s.type === 'operation' || s.type === 'com_log') {
+                            uniqueDays.add(new Date(s.startTime).toLocaleDateString('it-IT'));
+                        }
+                    });
+                    return uniqueDays.size;
+                };
+
+                const currentYear = new Date().getFullYear();
+                const thisYearSessions = sessions.filter(s => new Date(s.startTime).getFullYear() === currentYear);
+                
+                const presenceCountYear = calculatePresence(thisYearSessions);
+                const presenceCountTotal = calculatePresence(sessions);
+
+                return (
+                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white mb-8 shadow-lg relative overflow-hidden border border-slate-700">
+                        <div className="absolute right-0 top-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
+                         <div className="flex items-center gap-3 mb-4 relative z-10">
+                            <UserCheck size={24} className="text-blue-400" />
+                            <h3 className="font-bold text-lg tracking-wide">Giorni di Presenza</h3>
+                         </div>
+                         <div className="grid grid-cols-2 gap-4 relative z-10">
+                            <div>
+                                <div className="text-4xl font-bold text-white">{presenceCountYear}</div>
+                                <div className="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">Anno {currentYear}</div>
+                            </div>
+                            <div className="border-l border-slate-700 pl-4">
+                                <div className="text-4xl font-bold text-slate-300">{presenceCountTotal}</div>
+                                <div className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">Totale Storico</div>
+                            </div>
+                         </div>
+                         <div className="mt-4 pt-4 border-t border-slate-700/50 text-[10px] text-slate-500 flex items-center gap-1">
+                             <Info size={10} />
+                             Include: Lavoro, Com. Log. e Operazioni.
+                         </div>
+                    </div>
+                );
+            })()}
+
             <div className="space-y-8">
               {(() => {
                  // Group days by month
@@ -575,6 +791,7 @@ const App: React.FC = () => {
                             
                             const hasFullDayLeave = daysSessions.some(s => ['ord_2025', 'ord_2026', 'lic_937', 'rec_fest'].includes(s.type));
                             const hasRecComp = daysSessions.some(s => s.type === 'rec_comp');
+                            const hasOperation = daysSessions.some(s => s.type === 'operation');
                             
                             let dailyCredited = 0;
                             daysSessions.forEach(s => {
@@ -584,7 +801,7 @@ const App: React.FC = () => {
                             });
 
                             let deltaDisplay = 0;
-                            if (hasFullDayLeave) deltaDisplay = 0;
+                            if (hasFullDayLeave || hasOperation) deltaDisplay = 0;
                             else if (hasRecComp) deltaDisplay = -target;
                             else deltaDisplay = dailyCredited - target;
 
@@ -612,18 +829,20 @@ const App: React.FC = () => {
                                     <div key={session.id} className="relative pb-1">
                                         <div className="flex justify-between mb-0.5">
                                         <span className="text-xs text-slate-500 font-medium flex items-center gap-2">
-                                            <span className={`w-2 h-2 rounded-full ${session.type === 'work' ? 'bg-slate-400' : (session.type === 'com_log' ? 'bg-pink-400' : 'bg-blue-400')}`}></span>
+                                            <span className={`w-2 h-2 rounded-full ${session.type === 'work' ? 'bg-slate-400' : (session.type === 'com_log' ? 'bg-pink-400' : (session.type === 'operation' ? 'bg-emerald-400' : 'bg-blue-400'))}`}></span>
                                             {(session.type === 'work' || session.type === 'com_log') ? (
                                             <>
                                                 {new Date(session.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
                                                 {session.endTime ? new Date(session.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
                                             </>
                                             ) : (
-                                            <span>Giornata Intera</span>
+                                                <span>
+                                                    {session.type === 'operation' ? (session.activityRefined || session.activityRaw) : 'Giornata Intera'}
+                                                </span>
                                             )}
                                         </span>
                                         {session.type !== 'work' && (
-                                            <span className={`text-[10px] uppercase font-bold px-1.5 rounded ${session.type === 'com_log' ? 'text-pink-600 bg-pink-50' : 'text-blue-600 bg-blue-50'}`}>{getTypeLabel(session.type)}</span>
+                                            <span className={`text-[10px] uppercase font-bold px-1.5 rounded ${session.type === 'com_log' ? 'text-pink-600 bg-pink-50' : (session.type === 'operation' ? 'text-emerald-700 bg-emerald-100' : 'text-blue-600 bg-blue-50')}`}>{getTypeLabel(session.type)}</span>
                                         )}
                                         </div>
                                         <div className="text-sm text-slate-600 break-words">
@@ -649,6 +868,39 @@ const App: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
             <h2 className="font-bold text-lg flex items-center gap-2"><Settings size={20} /> Impostazioni</h2>
             
+            {/* Logo Upload Section */}
+            <div className="space-y-4">
+               <h3 className="font-medium text-slate-800 text-sm uppercase tracking-wide border-b pb-2">Personalizzazione</h3>
+               <div className="flex items-center gap-4">
+                 <div className="shrink-0">
+                    {settings.logoUrl ? (
+                      <div className="relative">
+                        <img src={settings.logoUrl} alt="Logo" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                        <button 
+                          onClick={() => setSettings(prev => ({ ...prev, logoUrl: undefined }))}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-md"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400">
+                        <ImageIcon size={24} />
+                      </div>
+                    )}
+                 </div>
+                 <div className="flex-1">
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Logo Applicazione</label>
+                   <p className="text-xs text-slate-500 mb-2">Carica un'immagine quadrata (JPG, PNG). Max 2MB.</p>
+                   <label className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 cursor-pointer">
+                     <Upload size={16} />
+                     Scegli File
+                     <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                   </label>
+                 </div>
+               </div>
+            </div>
+
             <div className="space-y-4">
               <h3 className="font-medium text-slate-800 text-sm uppercase tracking-wide border-b pb-2">Orario di Lavoro Standard</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -739,6 +991,15 @@ const App: React.FC = () => {
                     className="w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-base md:text-sm"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Rec. Comp. Iniziale (h)</label>
+                  <input 
+                    type="number" 
+                    value={settings.leaveBalances?.rec_comp || 0}
+                    onChange={(e) => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: Number(e.target.value)}})}
+                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-base md:text-sm"
+                  />
+                </div>
               </div>
             </div>
 
@@ -762,30 +1023,37 @@ const App: React.FC = () => {
       </main>
 
       {/* Mobile Navigation */}
-      <nav className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-3 flex justify-between items-center z-20 md:hidden safe-area-pb shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-3 flex justify-around items-center z-20 md:hidden safe-area-pb shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <button 
           onClick={() => setView('dashboard')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 ${view === 'dashboard' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'dashboard' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          <Clock size={22} strokeWidth={view === 'dashboard' ? 2.5 : 2} /> Home
+          <Clock size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /> Home
+        </button>
+        <button 
+          onClick={() => setView('operations')}
+          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'operations' ? 'text-emerald-600 bg-emerald-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <MapPin size={20} strokeWidth={view === 'operations' ? 2.5 : 2} /> Op.
         </button>
         <button 
           onClick={() => setView('history')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 ${view === 'history' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'history' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          <Calendar size={22} strokeWidth={view === 'history' ? 2.5 : 2} /> Storico
+          <Calendar size={20} strokeWidth={view === 'history' ? 2.5 : 2} /> Storico
         </button>
         <button 
           onClick={() => setView('settings')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 ${view === 'settings' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'settings' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          <Settings size={22} strokeWidth={view === 'settings' ? 2.5 : 2} /> Opzioni
+          <Settings size={20} strokeWidth={view === 'settings' ? 2.5 : 2} /> Opz.
         </button>
       </nav>
 
       {/* Desktop Navigation Hints (Hidden on mobile) */}
       <div className="hidden md:flex fixed top-4 right-4 z-20 gap-2">
          <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Dashboard</button>
+         <button onClick={() => setView('operations')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'operations' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Operazioni</button>
          <button onClick={() => setView('history')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'history' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Storico</button>
          <button onClick={() => setView('settings')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'settings' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Opzioni</button>
       </div>
