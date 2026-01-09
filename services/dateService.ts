@@ -1,26 +1,40 @@
 import { UserSettings, WorkSession } from '../types';
 
 // Fixed Italian Holidays (DD-MM)
+// Corrected to DD-MM format to match getDay()/getMonth() logic
 const FIXED_HOLIDAYS = new Set([
   '01-01', // Capodanno
-  '01-06', // Epifania
-  '04-25', // Liberazione
-  '05-01', // Festa del Lavoro
-  '06-02', // Repubblica
-  '08-15', // Ferragosto
-  '11-01', // Ognissanti
-  '12-08', // Immacolata
-  '12-25', // Natale
-  '12-26', // Santo Stefano
+  '06-01', // Epifania
+  '25-04', // Liberazione
+  '01-05', // Festa del Lavoro
+  '02-06', // Repubblica
+  '15-08', // Ferragosto
+  '01-11', // Ognissanti
+  '08-12', // Immacolata
+  '25-12', // Natale
+  '26-12', // Santo Stefano
 ]);
 
 export const isHoliday = (date: Date): boolean => {
-  const dayMonth = date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }).replace('/', '-');
+  const d = date.getDate().toString().padStart(2, '0');
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const dayMonth = `${d}-${m}`;
   return FIXED_HOLIDAYS.has(dayMonth);
 };
 
 export const getTargetHoursForDate = (dateString: string, settings: UserSettings): number => {
-  const date = new Date(dateString);
+  let date: Date;
+  
+  // Handle different date string formats
+  if (dateString.includes('T')) {
+    // ISO String (has time): Parse as standard Date
+    date = new Date(dateString);
+  } else {
+    // YYYY-MM-DD: Parse as local midnight to prevent UTC timezone shifts
+    const [y, m, d] = dateString.split('-').map(Number);
+    date = new Date(y, m - 1, d);
+  }
+
   const day = date.getDay(); // 0 = Sun, 1 = Mon, ... 6 = Sat
 
   // Check Holidays first
@@ -58,7 +72,7 @@ export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSet
 
   // 1. Group sessions by unique day
   sessions.forEach(session => {
-    // Use ISO date part YYYY-MM-DD
+    // Use ISO date part YYYY-MM-DD based on local time
     const dateKey = new Date(session.startTime).toLocaleDateString('sv-SE'); 
     if (!sessionsByDay.has(dateKey)) {
       sessionsByDay.set(dateKey, []);
