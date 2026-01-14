@@ -10,6 +10,13 @@ export interface WorkSession {
   tags: string[];
 }
 
+export interface SalaryEntry {
+  id: string;
+  date: string; // ISO string (YYYY-MM-DD)
+  amount: number;
+  note?: string;
+}
+
 export interface DailyStat {
   date: string; // YYYY-MM-DD
   totalHours: number;

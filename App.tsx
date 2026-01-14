@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, TrendingUp, TrendingDown, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck } from 'lucide-react';
-import { WorkSession, UserSettings, SessionType } from './types';
+import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, TrendingUp, TrendingDown, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet } from 'lucide-react';
+import { WorkSession, UserSettings, SessionType, SalaryEntry } from './types';
 import * as Storage from './services/storageService';
 import * as GeminiService from './services/geminiService';
 import * as DateService from './services/dateService';
@@ -9,12 +9,19 @@ import WorkChart from './components/WorkChart';
 const App: React.FC = () => {
   // State
   const [sessions, setSessions] = useState<WorkSession[]>([]);
+  const [salaries, setSalaries] = useState<SalaryEntry[]>([]);
   const [settings, setSettings] = useState<UserSettings>({ 
     schedule: { monThu: 8.5, fri: 4, satSun: 0 },
     leaveBalances: { ord_2025: 0, ord_2026: 0, lic_937: 0, rec_fest: 0, com_log: 0, rec_comp: 0 }
   });
   
-  const [view, setView] = useState<'dashboard' | 'history' | 'operations' | 'settings'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'history' | 'operations' | 'settings' | 'salary'>('dashboard');
+
+  // Real-time Date State (for Header)
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Button Feedback State
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
   
   // Manual Entry State
   // Use 'fr-CA' locale hack to get YYYY-MM-DD in local time
@@ -24,13 +31,28 @@ const App: React.FC = () => {
   const [entryType, setEntryType] = useState<SessionType>('work');
   const [entryActivity, setEntryActivity] = useState('');
 
-  // Operations Entry State
-  const [opDate, setOpDate] = useState(new Date().toLocaleDateString('fr-CA'));
+  // Operations Entry State (SIMPLIFIED: Date Range)
+  const [opStartDate, setOpStartDate] = useState(new Date().toLocaleDateString('fr-CA'));
+  const [opEndDate, setOpEndDate] = useState(new Date().toLocaleDateString('fr-CA'));
   const [opLocation, setOpLocation] = useState('');
+
+  // Salary Entry State
+  const [salaryDate, setSalaryDate] = useState(new Date().toLocaleDateString('fr-CA'));
+  const [salaryAmount, setSalaryAmount] = useState('');
+  const [salaryNote, setSalaryNote] = useState('');
 
   // UI State for Activity Editing / AI
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [activityText, setActivityText] = useState('');
+  
+  // Edit State Object (for full editing of operations)
+  const [editForm, setEditForm] = useState<{
+    date: string;
+    startTime: string;
+    endTime: string;
+    activity: string;
+  } | null>(null);
+
+  const [activityText, setActivityText] = useState(''); // Only used for simple Dashboard text edit
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
 
@@ -38,8 +60,18 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadedSessions = Storage.loadSessions();
     const loadedSettings = Storage.loadSettings();
+    const loadedSalaries = Storage.loadSalaries();
     setSessions(loadedSessions);
     setSettings(loadedSettings);
+    setSalaries(loadedSalaries);
+  }, []);
+
+  // Live Clock Effect: Update currentDate every minute to ensure header is fresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60000); // Check every minute
+    return () => clearInterval(timer);
   }, []);
 
   // Update Favicon dynamically when logo settings change
@@ -71,11 +103,17 @@ const App: React.FC = () => {
     Storage.saveSettings(settings);
   }, [settings]);
 
+  // Persist salaries
+  useEffect(() => {
+    Storage.saveSalaries(salaries);
+  }, [salaries]);
+
   // --- Logic ---
 
   const handleAddManualSession = async () => {
     if (!entryDate) return;
 
+    // Validation
     let startDateTime: Date;
     let endDateTime: Date;
 
@@ -101,6 +139,9 @@ const App: React.FC = () => {
       endDateTime = new Date(startDateTime.getTime() + targetHours * 60 * 60 * 1000);
     }
 
+    // Start UI feedback
+    setSaveStatus('saving');
+
     const newSession: WorkSession = {
       id: crypto.randomUUID(),
       startTime: startDateTime.toISOString(),
@@ -111,10 +152,22 @@ const App: React.FC = () => {
       tags: []
     };
 
+    // Small timeout to allow UI to show "saving" momentarily for better feel, or just immediate.
+    // We'll add a tiny delay to make the transition perceptible.
+    await new Promise(r => setTimeout(r, 400));
+
     setSessions(prev => [...prev, newSession]);
     
-    // Reset activity but keep times/date for easier sequential entry
+    // Show Success state
+    setSaveStatus('success');
+
+    // Reset Form
     setEntryActivity('');
+    
+    // Reset button after 2 seconds
+    setTimeout(() => {
+        setSaveStatus('idle');
+    }, 2000);
     
     // AI Refinement Trigger (only for actual work)
     if (entryActivity && entryType === 'work') {
@@ -128,28 +181,73 @@ const App: React.FC = () => {
   };
 
   const handleAddOperation = () => {
-    if (!opDate || !opLocation) {
-        alert("Inserisci data e luogo.");
+    if (!opStartDate || !opEndDate || !opLocation) {
+        alert("Inserisci date e luogo.");
         return;
     }
 
-    // Operations are stored as full days (to mask default schedule) but with type 'operation'
-    // dateService.ts handles logic to NOT deduct hours from balance.
-    const startDateTime = new Date(`${opDate}T09:00:00`);
-    const endDateTime = new Date(`${opDate}T17:00:00`); // Dummy times
+    const start = new Date(opStartDate);
+    const end = new Date(opEndDate);
 
-    const newSession: WorkSession = {
-        id: crypto.randomUUID(),
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
-        type: 'operation',
-        activityRaw: opLocation,
-        activityRefined: opLocation,
-        tags: ['operation']
+    if (end < start) {
+        alert("La data di fine deve essere successiva o uguale alla data di inizio.");
+        return;
+    }
+
+    const newSessions: WorkSession[] = [];
+    
+    // Clone start date to iterate
+    let loopDate = new Date(start);
+
+    // Loop through each day from start to end
+    while (loopDate <= end) {
+        const dateStr = loopDate.toLocaleDateString('fr-CA'); // YYYY-MM-DD
+        
+        // Standard operational hours 08:00 - 17:00 for the record
+        const sTime = new Date(`${dateStr}T08:00:00`);
+        const eTime = new Date(`${dateStr}T17:00:00`);
+
+        newSessions.push({
+            id: crypto.randomUUID(),
+            startTime: sTime.toISOString(),
+            endTime: eTime.toISOString(),
+            type: 'operation',
+            activityRaw: opLocation,
+            activityRefined: opLocation,
+            tags: ['operation']
+        });
+
+        // Add 1 day
+        loopDate.setDate(loopDate.getDate() + 1);
+    }
+
+    setSessions(prev => [...prev, ...newSessions]);
+    setOpLocation('');
+    // We leave dates as is for convenience or reset? Let's leave them.
+  };
+
+  const handleAddSalary = () => {
+    if (!salaryAmount || !salaryDate) {
+      alert("Inserisci data e importo.");
+      return;
+    }
+
+    const newEntry: SalaryEntry = {
+      id: crypto.randomUUID(),
+      date: salaryDate,
+      amount: parseFloat(salaryAmount),
+      note: salaryNote
     };
 
-    setSessions(prev => [...prev, newSession]);
-    setOpLocation('');
+    setSalaries(prev => [...prev, newEntry]);
+    setSalaryAmount('');
+    setSalaryNote('');
+  };
+
+  const handleDeleteSalary = (id: string) => {
+    if (confirm("Eliminare questa voce dallo stipendio?")) {
+      setSalaries(prev => prev.filter(s => s.id !== id));
+    }
   };
 
   const handleSaveActivity = async (sessionId: string) => {
@@ -158,6 +256,49 @@ const App: React.FC = () => {
     ));
     setEditingSessionId(null);
     setActivityText('');
+  };
+
+  const startEditingOperation = (session: WorkSession) => {
+    const startDate = new Date(session.startTime);
+    const endDate = session.endTime ? new Date(session.endTime) : startDate;
+    
+    // Format for inputs
+    const dateStr = startDate.toLocaleDateString('fr-CA'); // YYYY-MM-DD
+    const startStr = startDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const endStr = endDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+    setEditForm({
+      date: dateStr,
+      startTime: startStr,
+      endTime: endStr,
+      activity: session.activityRefined || session.activityRaw
+    });
+    setEditingSessionId(session.id);
+  };
+
+  const saveEditedOperation = (sessionId: string) => {
+    if (!editForm) return;
+
+    const startDateTime = new Date(`${editForm.date}T${editForm.startTime}`);
+    const endDateTime = new Date(`${editForm.date}T${editForm.endTime}`);
+
+    if (endDateTime <= startDateTime) {
+      alert("L'orario di fine deve essere successivo all'inizio.");
+      return;
+    }
+
+    setSessions(prev => prev.map(s => 
+      s.id === sessionId ? {
+        ...s,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        activityRaw: editForm.activity,
+        activityRefined: editForm.activity
+      } : s
+    ));
+    
+    setEditingSessionId(null);
+    setEditForm(null);
   };
 
   const handleRefineWithAI = async (sessionId: string) => {
@@ -203,8 +344,16 @@ const App: React.FC = () => {
 
   // --- Derived Data ---
   
-  const todayDateStr = new Date().toISOString();
-  const todayLocale = new Date().toLocaleDateString('it-IT');
+  // Use currentDate state to derived today's info
+  const todayDateStr = currentDate.toISOString();
+  const todayLocale = currentDate.toLocaleDateString('it-IT', { 
+    weekday: 'short', 
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
+  // Capitalize first letter (e.g., "lun, 10 gennaio" -> "Lun, 10 gennaio")
+  const todayLocaleFormatted = todayLocale.charAt(0).toUpperCase() + todayLocale.slice(1);
   
   // Total Balance (Monte Ore - Straordinario)
   const totalBalance = DateService.calculateTotalBalance(sessions, settings);
@@ -289,7 +438,7 @@ const App: React.FC = () => {
             <h1 className="font-bold text-xl tracking-tight text-white">WorkLog</h1>
           </div>
           <div className="text-xs font-semibold px-2.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-blue-50 border border-white/10">
-            {todayLocale}
+            {todayLocaleFormatted}
           </div>
         </div>
       </header>
@@ -476,13 +625,25 @@ const App: React.FC = () => {
               
               <button 
                 onClick={handleAddManualSession}
+                disabled={saveStatus !== 'idle'}
                 className={`w-full text-white font-semibold py-3.5 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 
-                  ${entryType === 'work' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' : 
+                  ${saveStatus === 'success' ? 'bg-green-600 shadow-green-200 scale-[1.02]' : 
+                    entryType === 'work' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' : 
                     entryType === 'com_log' ? 'bg-pink-600 hover:bg-pink-700 shadow-pink-200' :
                     entryType === 'rec_comp' ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-200' : 
                     'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
               >
-                <Save size={18} /> {entryType === 'work' || entryType === 'com_log' ? 'Registra Ore' : 'Conferma Assenza'}
+                {saveStatus === 'saving' ? (
+                   <Loader2 className="animate-spin" size={20} />
+                ) : saveStatus === 'success' ? (
+                   <Check size={20} className="animate-in zoom-in spin-in-12 duration-300" />
+                ) : (
+                   <Save size={18} />
+                )}
+                
+                {saveStatus === 'saving' ? 'Salvataggio...' : 
+                 saveStatus === 'success' ? 'Salvato!' : 
+                 (entryType === 'work' || entryType === 'com_log' ? 'Registra Ore' : 'Conferma Assenza')}
               </button>
             </div>
 
@@ -609,6 +770,117 @@ const App: React.FC = () => {
           </>
         )}
 
+        {/* --- SALARY VIEW --- */}
+        {view === 'salary' && (
+            <div className="space-y-6">
+                
+                {/* Yearly Total Card */}
+                {(() => {
+                    const currentYear = new Date().getFullYear();
+                    const yearlyTotal = salaries
+                        .filter(s => new Date(s.date).getFullYear() === currentYear)
+                        .reduce((sum, s) => sum + s.amount, 0);
+
+                    return (
+                        <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl shadow-lg shadow-amber-200 border border-amber-400/20 p-6 text-white relative overflow-hidden">
+                          <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+                          <div className="flex items-center gap-3 mb-4">
+                            <Wallet size={24} className="text-amber-100" />
+                            <span className="text-sm font-bold uppercase tracking-wider text-amber-50">Totale {currentYear}</span>
+                          </div>
+                          <div className="relative z-10">
+                            <div className="text-5xl font-bold text-white tracking-tight">€ {yearlyTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <div className="text-sm text-amber-100 mt-1">Stipendi percepiti</div>
+                          </div>
+                        </div>
+                    );
+                })()}
+
+                {/* Add Salary Card */}
+                <div className="bg-white rounded-2xl shadow-sm border border-amber-200 ring-1 ring-amber-50 p-5 md:p-6 relative">
+                    <h3 className="font-bold text-amber-800 mb-5 flex items-center gap-2 border-b border-amber-100 pb-3">
+                        <Plus size={20} className="text-amber-600" /> Registra Stipendio
+                    </h3>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Data Accredito</label>
+                                <input 
+                                    type="date" 
+                                    value={salaryDate} 
+                                    onChange={e => setSalaryDate(e.target.value)} 
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Importo (€)</label>
+                                <input 
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={salaryAmount} 
+                                    onChange={e => setSalaryAmount(e.target.value)} 
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Note (Opzionale)</label>
+                            <input 
+                                type="text"
+                                placeholder="Es. Tredicesima, Bonus..."
+                                value={salaryNote} 
+                                onChange={e => setSalaryNote(e.target.value)} 
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                            />
+                        </div>
+                        <button 
+                            onClick={handleAddSalary}
+                            className="w-full text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-amber-200 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
+                        >
+                            <Save size={18} /> Salva
+                        </button>
+                    </div>
+                </div>
+
+                {/* Salary History List */}
+                <div className="space-y-3">
+                    <h3 className="font-semibold text-slate-800 ml-1">Archivio Stipendi</h3>
+                    {salaries.length > 0 ? (
+                        [...salaries].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(s => (
+                            <div key={s.id} className="bg-white border border-amber-100 rounded-xl p-4 shadow-sm flex items-center justify-between group">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="text-sm font-bold text-slate-800 capitalize">
+                                            {new Date(s.date).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+                                        </div>
+                                        <div className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                            {new Date(s.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}
+                                        </div>
+                                    </div>
+                                    <div className="text-amber-600 font-mono font-bold text-lg">
+                                        € {s.amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                    {s.note && <div className="text-xs text-slate-500 mt-1 italic">{s.note}</div>}
+                                </div>
+                                <button 
+                                    onClick={() => handleDeleteSalary(s.id)}
+                                    className="text-slate-300 hover:text-red-500 p-2 transition-colors"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-10 text-slate-400 text-sm bg-slate-100/50 rounded-xl border border-slate-100 border-dashed">
+                            Nessuno stipendio registrato.
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        )}
+
         {/* --- OPERATIONS VIEW --- */}
         {view === 'operations' && (
             <div className="space-y-6">
@@ -626,22 +898,43 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* New Operation Card */}
+                {/* New Operation Card - SIMPLIFIED */}
                 <div className="bg-white rounded-2xl shadow-sm border border-emerald-200 ring-1 ring-emerald-50 p-5 md:p-6 relative">
                   <h3 className="font-bold text-emerald-800 mb-5 flex items-center gap-2 border-b border-emerald-100 pb-3">
                     <Plus size={20} className="text-emerald-600" /> Nuova Operazione
                   </h3>
                   
                   <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Data Missione</label>
-                        <input 
-                            type="date" 
-                            value={opDate} 
-                            onChange={e => setOpDate(e.target.value)} 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
-                        />
+                      
+                      <div className="grid grid-cols-2 gap-3 items-end">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Data Inizio</label>
+                          <input 
+                              type="date" 
+                              value={opStartDate} 
+                              onChange={e => {
+                                  setOpStartDate(e.target.value);
+                                  // Auto-advance end date if it's before start
+                                  if(e.target.value > opEndDate) setOpEndDate(e.target.value);
+                              }} 
+                              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center pb-4 text-emerald-300">
+                             <ArrowRight size={20} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Data Fine</label>
+                          <input 
+                              type="date" 
+                              value={opEndDate} 
+                              min={opStartDate}
+                              onChange={e => setOpEndDate(e.target.value)} 
+                              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-base md:text-sm font-medium text-slate-700"
+                          />
+                        </div>
                       </div>
+
                       <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase">Luogo / Descrizione</label>
                         <input 
@@ -655,13 +948,13 @@ const App: React.FC = () => {
 
                       <button 
                         onClick={handleAddOperation}
-                        className="w-full text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-emerald-200 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
+                        className="w-full text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-indigo-200 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
                       >
                         <Save size={18} /> Salva Operazione
                       </button>
                       <p className="text-xs text-emerald-600/80 text-center mt-2 flex items-center justify-center gap-1">
                           <Info size={12} />
-                          Le operazioni non incidono sul Monte Ore ordinario.
+                          Verrà generata una voce per ogni giorno del periodo.
                       </p>
                   </div>
                 </div>
@@ -671,20 +964,93 @@ const App: React.FC = () => {
                     <h3 className="font-semibold text-slate-800 ml-1">Storico Operazioni</h3>
                     {operationsList.length > 0 ? (
                         operationsList.map(op => (
-                            <div key={op.id} className="bg-white border border-emerald-100 rounded-xl p-4 flex items-center justify-between shadow-sm group">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="text-sm font-bold text-slate-800">{new Date(op.startTime).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                                        {DateService.isHoliday(new Date(op.startTime)) && <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold">FESTIVO</span>}
+                            <div key={op.id} className="bg-white border border-emerald-100 rounded-xl p-4 shadow-sm group">
+                                {editingSessionId === op.id && editForm ? (
+                                    // EDIT MODE (Allows specific tweaks if really needed, but creation is now range-based)
+                                    <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                                      <div className="flex justify-between items-center border-b border-emerald-100 pb-2 mb-2">
+                                        <h4 className="font-bold text-emerald-700 text-sm flex items-center gap-2"><Pencil size={14} /> Modifica Giorno Singolo</h4>
+                                        <button onClick={() => { setEditingSessionId(null); setEditForm(null); }} className="text-slate-400 hover:text-slate-600">
+                                          <X size={18} />
+                                        </button>
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Data</label>
+                                        <input 
+                                          type="date" 
+                                          value={editForm.date}
+                                          onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <label className="text-[10px] uppercase font-bold text-slate-500">Inizio</label>
+                                          <input 
+                                            type="time" 
+                                            value={editForm.startTime}
+                                            onChange={(e) => setEditForm({...editForm, startTime: e.target.value})}
+                                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] uppercase font-bold text-slate-500">Fine</label>
+                                          <input 
+                                            type="time" 
+                                            value={editForm.endTime}
+                                            onChange={(e) => setEditForm({...editForm, endTime: e.target.value})}
+                                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Descrizione</label>
+                                        <input 
+                                          type="text" 
+                                          value={editForm.activity}
+                                          onChange={(e) => setEditForm({...editForm, activity: e.target.value})}
+                                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm"
+                                        />
+                                      </div>
+                                      <button 
+                                        onClick={() => saveEditedOperation(op.id)}
+                                        className="w-full bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 flex items-center justify-center gap-2"
+                                      >
+                                        <Save size={16} /> Salva Modifiche
+                                      </button>
                                     </div>
-                                    <div className="text-sm text-emerald-700 font-medium flex items-center gap-1.5">
-                                        <MapPin size={14} />
-                                        {op.activityRefined || op.activityRaw}
+                                ) : (
+                                    // VIEW MODE
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className="text-sm font-bold text-slate-800">{new Date(op.startTime).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                                                {DateService.isHoliday(new Date(op.startTime)) && <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold">FESTIVO</span>}
+                                            </div>
+                                            {/* Time hidden in view to keep it simple as requested, but stored in DB */}
+                                            <div className="text-sm text-emerald-700 font-medium flex items-center gap-1.5 break-all">
+                                                <MapPin size={14} className="shrink-0" />
+                                                {op.activityRefined || op.activityRaw}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <button 
+                                              onClick={() => startEditingOperation(op)} 
+                                              className="text-slate-400 hover:text-emerald-600 p-2 bg-slate-50 rounded-lg hover:bg-emerald-50 transition-colors"
+                                              title="Modifica Dettaglio"
+                                            >
+                                                <Pencil size={16} />
+                                            </button>
+                                            <button 
+                                              onClick={() => handleDeleteSession(op.id)} 
+                                              className="text-slate-400 hover:text-red-500 p-2 bg-slate-50 rounded-lg hover:bg-red-50 transition-colors"
+                                              title="Elimina"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <button onClick={() => handleDeleteSession(op.id)} className="text-slate-300 hover:text-red-500 p-2">
-                                    <Trash2 size={18} />
-                                </button>
+                                )}
                             </div>
                         ))
                     ) : (
@@ -1023,37 +1389,60 @@ const App: React.FC = () => {
       </main>
 
       {/* Mobile Navigation */}
-      <nav className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-3 flex justify-around items-center z-20 md:hidden safe-area-pb shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <button 
-          onClick={() => setView('dashboard')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'dashboard' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          <Clock size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /> Home
-        </button>
-        <button 
-          onClick={() => setView('operations')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'operations' ? 'text-emerald-600 bg-emerald-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          <MapPin size={20} strokeWidth={view === 'operations' ? 2.5 : 2} /> Op.
-        </button>
-        <button 
-          onClick={() => setView('history')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'history' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          <Calendar size={20} strokeWidth={view === 'history' ? 2.5 : 2} /> Storico
-        </button>
-        <button 
-          onClick={() => setView('settings')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-16 ${view === 'settings' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          <Settings size={20} strokeWidth={view === 'settings' ? 2.5 : 2} /> Opz.
-        </button>
+      <nav className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 pb-safe pt-2 flex justify-between items-end z-30 md:hidden safe-area-pb shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] h-20">
+        {/* Left Group */}
+        <div className="flex justify-around w-full pb-2">
+            <button 
+              onClick={() => setView('dashboard')}
+              className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-14 ${view === 'dashboard' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Clock size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /> Home
+            </button>
+            <button 
+              onClick={() => setView('operations')}
+              className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-14 ${view === 'operations' ? 'text-emerald-600 bg-emerald-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <MapPin size={20} strokeWidth={view === 'operations' ? 2.5 : 2} /> Op.
+            </button>
+        </div>
+
+        {/* Center Floating Button (Cash) */}
+        <div className="relative w-20 flex justify-center z-40">
+           <button 
+             onClick={() => setView('salary')}
+             className={`absolute -top-20 w-16 h-16 rounded-full flex flex-col items-center justify-center text-white shadow-xl border-[4px] border-white transition-all active:scale-90
+               ${view === 'salary' 
+                 ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-200 ring-2 ring-amber-100' 
+                 : 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-amber-100'}
+             `}
+           >
+             <Banknote size={24} strokeWidth={2.5} />
+             <span className="text-[10px] font-bold leading-none mt-0.5">Cash</span>
+           </button>
+        </div>
+
+        {/* Right Group */}
+        <div className="flex justify-around w-full pb-2">
+            <button 
+              onClick={() => setView('history')}
+              className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-14 ${view === 'history' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Calendar size={20} strokeWidth={view === 'history' ? 2.5 : 2} /> Storico
+            </button>
+            <button 
+              onClick={() => setView('settings')}
+              className={`flex flex-col items-center gap-1 text-[10px] font-medium p-2 rounded-xl transition-all active:scale-95 w-14 ${view === 'settings' ? 'text-blue-600 bg-blue-50 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Settings size={20} strokeWidth={view === 'settings' ? 2.5 : 2} /> Opz.
+            </button>
+        </div>
       </nav>
 
       {/* Desktop Navigation Hints (Hidden on mobile) */}
       <div className="hidden md:flex fixed top-4 right-4 z-20 gap-2">
          <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Dashboard</button>
          <button onClick={() => setView('operations')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'operations' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Operazioni</button>
+         <button onClick={() => setView('salary')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'salary' ? 'bg-amber-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Cash</button>
          <button onClick={() => setView('history')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'history' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Storico</button>
          <button onClick={() => setView('settings')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${view === 'settings' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Opzioni</button>
       </div>
