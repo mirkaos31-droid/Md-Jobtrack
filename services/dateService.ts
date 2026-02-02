@@ -82,8 +82,11 @@ export const calculateUsedLeave = (sessions: WorkSession[]) => {
 export const calculateEarnedDays = (sessions: WorkSession[]) => {
   const uniqueWorkHolidays = new Set<string>();
   sessions.forEach(s => {
-    if (s.type === 'work' && isHoliday(new Date(s.startTime))) {
-      uniqueWorkHolidays.add(new Date(s.startTime).toLocaleDateString('it-IT'));
+    const date = new Date(s.startTime);
+    const day = date.getDay();
+    // Include work done on Holidays, Saturdays (6), or Sundays (0)
+    if (s.type === 'work' && (isHoliday(date) || day === 0 || day === 6)) {
+      uniqueWorkHolidays.add(date.toLocaleDateString('it-IT'));
     }
   });
   return { rec_fest: uniqueWorkHolidays.size };
