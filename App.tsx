@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { WorkSession, UserSettings, SessionType, SalaryEntry } from './types';
 import * as Storage from './services/storageService';
 import * as GeminiService from './services/geminiService';
@@ -33,6 +33,10 @@ const App: React.FC = () => {
   const [salaryAmount, setSalaryAmount] = useState('');
   const [salaryNote, setSalaryNote] = useState('');
 
+  // History View State
+  const [expandedYear, setExpandedYear] = useState<number | null>(null);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ date: string; startTime: string; endTime: string; activity: string; } | null>(null);
   const [activityText, setActivityText] = useState('');
@@ -40,36 +44,52 @@ const App: React.FC = () => {
   const [aiReport, setAiReport] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadedSessions = Storage.loadSessions();
+    let loadedSessions = Storage.loadSessions();
     const loadedSalaries = Storage.loadSalaries();
     let loadedSettings = Storage.loadSettings();
 
+    // 1. 5-Year Auto-Cleanup
+    const fiveYearsAgo = new Date();
+    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+    const recentSessions = loadedSessions.filter(s => new Date(s.startTime) >= fiveYearsAgo);
+    
+    // Save immediately if data was cleaned
+    if (recentSessions.length !== loadedSessions.length) {
+       loadedSessions = recentSessions;
+       Storage.saveSessions(loadedSessions);
+       console.log("Auto-cleanup: Removed sessions older than 5 years.");
+    }
+
     const now = new Date();
     const currentYear = now.getFullYear();
-    const nextYear = currentYear + 1;
     const balances = { ...loadedSettings.leaveBalances };
     const used = DateService.calculateUsedLeave(loadedSessions);
     let changed = false;
 
+    // Automatically add current year if missing, with default 39 days
     if (balances[`ord_${currentYear}`] === undefined) {
-      balances[`ord_${currentYear}`] = 0;
-      changed = true;
-    }
-    if (balances[`ord_${nextYear}`] === undefined) {
-      balances[`ord_${nextYear}`] = 0;
+      balances[`ord_${currentYear}`] = 39;
       changed = true;
     }
 
     Object.keys(balances).forEach(key => {
       if (key.startsWith('ord_')) {
         const year = parseInt(key.split('_')[1]);
+        const initial = balances[key];
+        
+        // Remove past years if exhausted
         if (year < currentYear) {
-          const initial = balances[key];
           const spent = used[key] || 0;
           if (initial - spent <= 0) {
             delete balances[key];
             changed = true;
           }
+        }
+        
+        // Remove future years if they are 0
+        if (year > currentYear && initial === 0) {
+          delete balances[key];
+          changed = true;
         }
       }
     });
@@ -82,6 +102,9 @@ const App: React.FC = () => {
     setSessions(loadedSessions);
     setSettings(loadedSettings);
     setSalaries(loadedSalaries);
+    
+    // Set default expanded year to current year
+    setExpandedYear(currentYear);
   }, []);
 
   useEffect(() => {
@@ -191,6 +214,9 @@ const App: React.FC = () => {
     .filter(k => k.startsWith('ord_'))
     .sort((a, b) => a.localeCompare(b));
 
+  const currentYearNum = new Date().getFullYear();
+  const prevYearKey = `ord_${currentYearNum - 1}`;
+
   const getTypeLabel = (type: string) => {
     if (type.startsWith('ord_')) return `Ord. ${type.split('_')[1].slice(-2)}`;
     const map: Record<string, string> = { work:'Lavoro', lic_937:'Lic. 937', rec_fest:'Rec. Fest.', com_log:'Com. Log.', rec_comp:'Rec. Comp.', operation:'Operazione' };
@@ -203,18 +229,24 @@ const App: React.FC = () => {
     return map[type] || 'text-slate-700';
   };
 
-  const sessionsByDay = sessions.reduce((acc, session) => {
-    const day = new Date(session.startTime).toLocaleDateString('it-IT');
-    if (!acc[day]) acc[day] = [];
-    acc[day].push(session);
-    return acc;
-  }, {} as Record<string, WorkSession[]>);
+  // Grouping Logic for History
+  const historyData = useMemo(() => {
+    const grouped: Record<number, Record<number, WorkSession[]>> = {};
+    
+    sessions.forEach(session => {
+        const date = new Date(session.startTime);
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        
+        if (!grouped[year]) grouped[year] = {};
+        if (!grouped[year][month]) grouped[year][month] = [];
+        grouped[year][month].push(session);
+    });
 
-  const sortedDays = Object.keys(sessionsByDay).sort((a, b) => {
-    const [da, ma, ya] = a.split('/').map(Number);
-    const [db, mb, yb] = b.split('/').map(Number);
-    return new Date(yb, mb-1, db).getTime() - new Date(ya, ma-1, da).getTime();
-  });
+    return grouped;
+  }, [sessions]);
+
+  const sortedYears = Object.keys(historyData).map(Number).sort((a, b) => b - a);
 
   return (
     <div className="min-h-screen bg-slate-100 pb-20 md:pb-0">
@@ -380,41 +412,99 @@ const App: React.FC = () => {
         )}
 
         {view === 'history' && (
-          <div className="bg-white rounded-3xl shadow-md border border-slate-200 p-6 space-y-8">
-            <h2 className="text-xl font-bold flex items-center gap-2"><Calendar size={22} className="text-blue-600"/> Storico Completo</h2>
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold flex items-center gap-2 px-2 text-slate-800"><Calendar size={22} className="text-blue-600"/> Storico Completo</h2>
             
-            <div className="bg-slate-800 rounded-2xl p-6 text-white shadow-inner flex justify-between items-center">
+            <div className="bg-slate-800 rounded-2xl p-6 text-white shadow-lg flex justify-between items-center mb-6 mx-2">
                <div>
-                  <div className="text-xs font-bold uppercase opacity-50 mb-1">Giorni di Presenza</div>
+                  <div className="text-xs font-bold uppercase opacity-50 mb-1">Giorni di Presenza (Totale)</div>
                   <div className="text-3xl font-black">{new Set(sessions.filter(s => ['work', 'operation', 'com_log'].includes(s.type)).map(s => new Date(s.startTime).toLocaleDateString())).size}</div>
                </div>
                <UserCheck size={32} className="text-blue-400 opacity-50"/>
             </div>
 
-            <div className="space-y-8">
-              {Object.keys(sessionsByDay).reverse().map(dayStr => {
-                const daySessions = sessionsByDay[dayStr];
-                return (
-                  <div key={dayStr} className="space-y-3">
-                    <div className="sticky top-16 bg-white/95 backdrop-blur-sm z-10 py-2 border-b border-slate-100 font-bold text-slate-400 text-xs uppercase tracking-widest">{dayStr}</div>
-                    <div className="space-y-2">
-                      {daySessions.map(s => (
-                        <div key={s.id} className={`p-4 rounded-2xl border ${getTypeColor(s.type)} flex justify-between items-center`}>
-                          <div>
-                            <div className="text-[10px] font-black uppercase mb-1">{getTypeLabel(s.type)}</div>
-                            <div className="text-sm font-medium">{s.activityRefined || s.activityRaw || "Nessuna nota"}</div>
-                          </div>
-                          {s.endTime && (
-                            <div className="text-xs font-mono font-bold bg-white/50 px-2 py-1 rounded">
-                              {((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000).toFixed(2)}h
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+            {sortedYears.map(year => {
+              const yearData = historyData[year];
+              const sortedMonths = Object.keys(yearData).map(Number).sort((a, b) => b - a);
+              const isYearExpanded = expandedYear === year;
+
+              return (
+                <div key={year} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div 
+                    onClick={() => setExpandedYear(isYearExpanded ? null : year)}
+                    className="flex items-center justify-between p-4 bg-slate-50 cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-100"
+                  >
+                    <div className="text-lg font-bold text-slate-700">{year}</div>
+                    <div className="text-slate-400">{isYearExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
                   </div>
-                );
-              })}
+
+                  {isYearExpanded && (
+                    <div className="p-4 space-y-3">
+                      {sortedMonths.map(month => {
+                        const monthSessions = yearData[month];
+                        const monthName = new Date(year, month).toLocaleDateString('it-IT', { month: 'long' }).replace(/^\w/, c => c.toUpperCase());
+                        const presenceCount = new Set(monthSessions.filter(s => ['work', 'operation', 'com_log'].includes(s.type)).map(s => new Date(s.startTime).toLocaleDateString())).size;
+                        const monthKey = `${year}-${month}`;
+                        const isMonthExpanded = expandedMonth === monthKey;
+
+                        return (
+                          <div key={month} className="border border-slate-200 rounded-2xl overflow-hidden">
+                             <div 
+                                onClick={() => setExpandedMonth(isMonthExpanded ? null : monthKey)}
+                                className="flex items-center justify-between p-4 bg-white cursor-pointer hover:bg-blue-50/30 transition-colors"
+                             >
+                                <div className="flex items-center gap-3">
+                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${presenceCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
+                                     {presenceCount}
+                                   </div>
+                                   <div>
+                                      <div className="font-bold text-slate-800">{monthName}</div>
+                                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Presenze</div>
+                                   </div>
+                                </div>
+                                <div className="text-slate-300">
+                                   {isMonthExpanded ? <ChevronUp size={18}/> : <ChevronRight size={18}/>}
+                                </div>
+                             </div>
+
+                             {isMonthExpanded && (
+                               <div className="bg-slate-50/50 border-t border-slate-100 p-3 space-y-2">
+                                 {monthSessions
+                                   .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+                                   .map(s => (
+                                     <div key={s.id} className={`p-3 rounded-xl border ${getTypeColor(s.type)} bg-white shadow-sm flex justify-between items-center`}>
+                                        <div>
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <div className="text-[10px] font-black uppercase text-slate-400">{new Date(s.startTime).toLocaleDateString('it-IT', { day: 'numeric', weekday: 'short' })}</div>
+                                            <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                                            <div className="text-[10px] font-black uppercase">{getTypeLabel(s.type)}</div>
+                                          </div>
+                                          <div className="text-sm font-medium leading-tight">{s.activityRefined || s.activityRaw || "Nessuna nota"}</div>
+                                        </div>
+                                        {s.endTime && (
+                                          <div className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2 whitespace-nowrap">
+                                            {((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000).toFixed(1)}h
+                                          </div>
+                                        )}
+                                     </div>
+                                 ))}
+                               </div>
+                             )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            
+            {sortedYears.length === 0 && (
+                <div className="text-center py-10 text-slate-400">Nessun dato nello storico.</div>
+            )}
+            
+            <div className="text-center text-[10px] text-slate-400 py-4">
+               I dati antecedenti a 5 anni fa vengono eliminati automaticamente.
             </div>
           </div>
         )}
@@ -432,6 +522,16 @@ const App: React.FC = () => {
                      <input type="number" value={settings.leaveBalances[k]} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, [k]: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/>
                    </div>
                  ))}
+                 
+                 {!settings.leaveBalances[prevYearKey] && (
+                    <button 
+                        onClick={() => setSettings(prev => ({...prev, leaveBalances: {...prev.leaveBalances, [prevYearKey]: 0}}))} 
+                        className="border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-400 font-bold text-xs hover:border-blue-300 hover:text-blue-500 transition-all p-3"
+                    >
+                        <Plus size={16}/> Aggiungi Ord. {currentYearNum - 1}
+                    </button>
+                 )}
+
                  <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Licenza 937 (gg)</label><input type="number" value={settings.leaveBalances.lic_937} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, lic_937: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
                  <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Com. Log (h)</label><input type="number" value={settings.leaveBalances.com_log} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, com_log: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
                  <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Monte Ore Iniziale (h)</label><input type="number" value={settings.leaveBalances.rec_comp} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>

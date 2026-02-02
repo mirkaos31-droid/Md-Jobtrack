@@ -9,8 +9,7 @@ const currentYear = new Date().getFullYear();
 const DEFAULT_SETTINGS: UserSettings = {
   schedule: { monThu: 8.5, fri: 4, satSun: 0 },
   leaveBalances: {
-    [`ord_${currentYear}`]: 0,
-    [`ord_${currentYear + 1}`]: 0,
+    [`ord_${currentYear}`]: 39,
     lic_937: 0,
     rec_fest: 0,
     com_log: 0,
