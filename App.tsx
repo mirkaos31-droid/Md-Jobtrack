@@ -344,9 +344,9 @@ const App: React.FC = () => {
                 <h3 className="font-bold text-slate-800">Nuova Registrazione</h3>
               </div>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo Attività</label>
-                  <select value={entryType} onChange={e => setEntryType(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:border-blue-500 focus:bg-white outline-none appearance-none transition-colors">
+                <div className="min-w-0">
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Tipo Attività</label>
+                  <select value={entryType} onChange={e => setEntryType(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:border-blue-500 focus:bg-white outline-none appearance-none transition-colors">
                     <option value="work">💼 Lavoro</option>
                     <option value="com_log">📍 Com. Log.</option>
                     {ordinariaKeys.map(k => <option key={k} value={k}>🌴 {getTypeLabel(k)}</option>)}
@@ -356,29 +356,29 @@ const App: React.FC = () => {
                   </select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Data</label>
-                    <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
+                  <div className="min-w-0">
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Data</label>
+                    <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
                   </div>
                   {(entryType === 'work' || entryType === 'com_log') ? (
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inizio</label>
-                        <input type="time" value={entryStart} onChange={e => setEntryStart(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
+                    <div className="flex gap-3 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Inizio</label>
+                        <input type="time" value={entryStart} onChange={e => setEntryStart(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Fine</label>
-                        <input type="time" value={entryEnd} onChange={e => setEntryEnd(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Fine</label>
+                        <input type="time" value={entryEnd} onChange={e => setEntryEnd(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
                       </div>
                     </div>
                   ) : (
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 opacity-0 hidden sm:block">Durata</label>
-                      <div className="flex h-[52px] items-center justify-center text-sm font-bold text-blue-600 bg-blue-50 border-2 border-blue-100 rounded-xl px-4">Intera Giornata</div>
+                      <div className="flex h-[44px] sm:h-[52px] items-center justify-center text-sm font-bold text-blue-600 bg-blue-50 border-2 border-blue-100 rounded-xl px-4 truncate">Intera Giornata</div>
                     </div>
                   )}
                 </div>
-                <input type="text" value={entryActivity} onChange={e => setEntryActivity(e.target.value)} placeholder="Cosa hai fatto oggi?" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
+                <input type="text" value={entryActivity} onChange={e => setEntryActivity(e.target.value)} placeholder="Cosa hai fatto oggi?" className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
                 <button onClick={handleAddManualSession} disabled={saveStatus !== 'idle'} className={`w-full py-4 rounded-2xl text-white font-bold transition-all shadow-lg ${saveStatus === 'success' ? 'bg-green-500' : 'bg-blue-600 active:scale-95 shadow-blue-200'}`}>
                   {saveStatus === 'saving' ? <Loader2 className="animate-spin mx-auto"/> : saveStatus === 'success' ? <Check className="mx-auto"/> : 'Salva Registrazione'}
                 </button>
