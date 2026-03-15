@@ -51,3 +51,15 @@ export const loadSalaries = (): SalaryEntry[] => {
 export const saveSalaries = (salaries: SalaryEntry[]) => {
   localStorage.setItem(SALARIES_KEY, JSON.stringify(salaries));
 };
+
+export const loadDraft = () => {
+  try {
+    const data = localStorage.getItem('jobtrack_draft');
+    return data ? JSON.parse(data) : null;
+  } catch (e) { return null; }
+};
+
+export const saveDraft = (draft: any) => {
+  if (!draft) localStorage.removeItem('jobtrack_draft');
+  else localStorage.setItem('jobtrack_draft', JSON.stringify(draft));
+};

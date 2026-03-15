@@ -1,5 +1,5 @@
 
-export type SessionType = 'work' | 'lic_937' | 'rec_fest' | 'rec_comp' | 'com_log' | 'operation' | string;
+export type SessionType = 'work' | 'servizio' | 'lic_937' | 'rec_fest' | 'rec_comp' | 'com_log' | 'operation' | string;
 
 export interface WorkSession {
   id: string;

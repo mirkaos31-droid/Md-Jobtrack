@@ -11,6 +11,7 @@ interface WorkChartProps {
 // Color palette matching App.tsx styling
 const TYPE_COLORS: Record<string, string> = {
   work: '#334155',      // Slate-700 (Lavoro standard)
+  servizio: '#4338ca',  // Indigo-700 (Servizio)
   com_log: '#db2777',   // Pink-600 (Com. Log.)
   operation: '#059669', // Emerald-600 (Operazione)
   ord_2025: '#2563eb',  // Blue-600 (Ord 2025)
@@ -22,6 +23,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 const TYPE_LABELS: Record<string, string> = {
   work: 'Lavoro',
+  servizio: 'Servizio',
   com_log: 'Com. Log.',
   operation: 'Operazione',
   ord_2025: 'Ord. 25',
@@ -48,6 +50,7 @@ const WorkChart: React.FC<WorkChartProps> = ({ sessions, settings }) => {
         dateFull: d.toISOString(),
         total: 0,
         work: 0,
+        servizio: 0,
         com_log: 0,
         operation: 0,
         ord_2025: 0,

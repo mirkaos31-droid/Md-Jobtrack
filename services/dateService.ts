@@ -49,7 +49,7 @@ export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSet
     } else {
       let dailyCreditedDuration = 0;
       daySessions.forEach(s => {
-        if ((s.type === 'work' || s.type === 'com_log') && s.endTime) {
+        if ((s.type === 'work' || s.type === 'servizio' || s.type === 'com_log') && s.endTime) {
           dailyCreditedDuration += (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
         }
       });
@@ -64,7 +64,7 @@ export const calculateUsedLeave = (sessions: WorkSession[]) => {
   const usage: Record<string, number> = {};
 
   sessions.forEach(s => {
-    if (['work', 'rec_comp', 'operation'].includes(s.type)) return;
+    if (['work', 'servizio', 'rec_comp', 'operation'].includes(s.type)) return;
     
     if (s.type === 'com_log') {
       if (s.endTime) {
@@ -85,7 +85,7 @@ export const calculateEarnedDays = (sessions: WorkSession[]) => {
     const date = new Date(s.startTime);
     const day = date.getDay();
     // Include work done on Holidays, Saturdays (6), or Sundays (0)
-    if (s.type === 'work' && (isHoliday(date) || day === 0 || day === 6)) {
+    if ((s.type === 'work' || s.type === 'servizio') && (isHoliday(date) || day === 0 || day === 6)) {
       uniqueWorkHolidays.add(date.toLocaleDateString('it-IT'));
     }
   });

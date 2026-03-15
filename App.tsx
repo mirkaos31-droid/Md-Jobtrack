@@ -47,6 +47,15 @@ const App: React.FC = () => {
     let loadedSessions = Storage.loadSessions();
     const loadedSalaries = Storage.loadSalaries();
     let loadedSettings = Storage.loadSettings();
+    const loadedDraft = Storage.loadDraft();
+
+    if (loadedDraft) {
+      if (loadedDraft.entryDate) setEntryDate(loadedDraft.entryDate);
+      if (loadedDraft.entryStart) setEntryStart(loadedDraft.entryStart);
+      if (loadedDraft.entryEnd) setEntryEnd(loadedDraft.entryEnd);
+      if (loadedDraft.entryType) setEntryType(loadedDraft.entryType);
+      if (loadedDraft.entryActivity) setEntryActivity(loadedDraft.entryActivity);
+    }
 
     // 1. 5-Year Auto-Cleanup
     const fiveYearsAgo = new Date();
@@ -124,6 +133,10 @@ const App: React.FC = () => {
     Storage.saveSalaries(salaries);
   }, [salaries]);
 
+  useEffect(() => {
+    Storage.saveDraft({ entryDate, entryStart, entryEnd, entryType, entryActivity });
+  }, [entryDate, entryStart, entryEnd, entryType, entryActivity]);
+
   const handleAddManualSession = async () => {
     if (!entryDate) return;
     let startDateTime: Date;
@@ -144,11 +157,17 @@ const App: React.FC = () => {
     }
 
     setSaveStatus('saving');
+    
+    let finalType = entryType;
+    if (entryType === 'work' && entryEnd > '16:30') {
+      finalType = 'servizio';
+    }
+
     const newSession: WorkSession = {
       id: crypto.randomUUID(),
       startTime: startDateTime.toISOString(),
       endTime: endDateTime.toISOString(),
-      type: entryType,
+      type: finalType,
       activityRaw: entryActivity,
       activityRefined: entryActivity,
       tags: []
@@ -158,9 +177,13 @@ const App: React.FC = () => {
     setSessions(prev => [...prev, newSession]);
     setSaveStatus('success');
     setEntryActivity('');
+    setEntryStart('08:00');
+    setEntryEnd('16:30');
+    setEntryDate(new Date().toLocaleDateString('fr-CA'));
+    setEntryType('work');
     setTimeout(() => setSaveStatus('idle'), 2000);
     
-    if (entryActivity && entryType === 'work') {
+    if (entryActivity && (entryType === 'work' || finalType === 'servizio')) {
        setIsAiLoading(true);
        try {
          const refined = await GeminiService.refineActivityText(entryActivity);
@@ -219,13 +242,13 @@ const App: React.FC = () => {
 
   const getTypeLabel = (type: string) => {
     if (type.startsWith('ord_')) return `Ord. ${type.split('_')[1].slice(-2)}`;
-    const map: Record<string, string> = { work:'Lavoro', lic_937:'Lic. 937', rec_fest:'Rec. Fest.', com_log:'Com. Log.', rec_comp:'Rec. Comp.', operation:'Operazione' };
+    const map: Record<string, string> = { work:'Lavoro', servizio:'Servizio', lic_937:'Lic. 937', rec_fest:'Rec. Fest.', com_log:'Com. Log.', rec_comp:'Rec. Comp.', operation:'Operazione' };
     return map[type] || type;
   };
 
   const getTypeColor = (type: string) => {
     if (type.startsWith('ord_')) return 'text-blue-700 bg-blue-50 border-blue-200';
-    const map: Record<string, string> = { work:'text-slate-700 bg-slate-50 border-slate-200', lic_937:'text-purple-700 bg-purple-50 border-purple-200', rec_fest:'text-orange-700 bg-orange-50 border-orange-200', com_log:'text-pink-700 bg-pink-50 border-pink-200', rec_comp:'text-teal-700 bg-teal-50 border-teal-200', operation:'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    const map: Record<string, string> = { work:'text-slate-700 bg-slate-50 border-slate-200', servizio:'text-indigo-700 bg-indigo-50 border-indigo-200', lic_937:'text-purple-700 bg-purple-50 border-purple-200', rec_fest:'text-orange-700 bg-orange-50 border-orange-200', com_log:'text-pink-700 bg-pink-50 border-pink-200', rec_comp:'text-teal-700 bg-teal-50 border-teal-200', operation:'text-emerald-700 bg-emerald-50 border-emerald-200' };
     return map[type] || 'text-slate-700';
   };
 
@@ -310,13 +333,12 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6 flex flex-col items-center justify-center text-center">
-               <div className={`w-full h-1.5 rounded-full mb-4 ${totalBalance >= 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
-               <div className="flex items-center gap-2 text-slate-500 mb-1"><Briefcase size={20}/><span className="text-sm font-bold uppercase tracking-widest">Monte Ore</span></div>
-               <div className={`text-4xl font-black ${totalBalance >= 0 ? 'text-green-700' : 'text-red-600'}`}>{totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)}h</div>
+            <div className={`bg-white rounded-2xl p-6 flex flex-col items-center justify-center text-center border-2 transition-all duration-300 ${totalBalance >= 0 ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.4)]' : 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.4)]'}`}>
+               <div className="flex items-center gap-2 text-slate-500 mb-2"><Briefcase size={20}/><span className="text-sm font-bold uppercase tracking-widest">Monte Ore</span></div>
+               <div className={`text-5xl font-black tracking-tight ${totalBalance >= 0 ? 'text-green-600 drop-shadow-[0_0_10px_rgba(74,222,128,0.4)]' : 'text-red-600 drop-shadow-[0_0_10px_rgba(248,113,113,0.4)]'}`}>{totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)}h</div>
             </div>
 
-            <div className="bg-white rounded-3xl shadow-md border border-slate-200 p-6 space-y-5">
+            <div className="bg-white rounded-3xl p-6 space-y-5 border-2 border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.4)] transition-all duration-300">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
                 <div className="bg-blue-50 text-blue-600 p-2 rounded-xl"><Plus size={20}/></div>
                 <h3 className="font-bold text-slate-800">Nuova Registrazione</h3>
@@ -324,7 +346,7 @@ const App: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo Attività</label>
-                  <select value={entryType} onChange={e => setEntryType(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
+                  <select value={entryType} onChange={e => setEntryType(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:border-blue-500 focus:bg-white outline-none appearance-none transition-colors">
                     <option value="work">💼 Lavoro</option>
                     <option value="com_log">📍 Com. Log.</option>
                     {ordinariaKeys.map(k => <option key={k} value={k}>🌴 {getTypeLabel(k)}</option>)}
@@ -333,23 +355,37 @@ const App: React.FC = () => {
                     <option value="rec_comp">⚡ Rec. Compensativo</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Data</label><input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"/></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Data</label>
+                    <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
+                  </div>
                   {(entryType === 'work' || entryType === 'com_log') ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="time" value={entryStart} onChange={e => setEntryStart(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"/>
-                      <input type="time" value={entryEnd} onChange={e => setEntryEnd(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"/>
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inizio</label>
+                        <input type="time" value={entryStart} onChange={e => setEntryStart(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Fine</label>
+                        <input type="time" value={entryEnd} onChange={e => setEntryEnd(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
+                      </div>
                     </div>
-                  ) : <div className="flex items-center justify-center text-xs font-bold text-blue-600 bg-blue-50 rounded-xl px-4">Intera Giornata</div>}
+                  ) : (
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 opacity-0 hidden sm:block">Durata</label>
+                      <div className="flex h-[52px] items-center justify-center text-sm font-bold text-blue-600 bg-blue-50 border-2 border-blue-100 rounded-xl px-4">Intera Giornata</div>
+                    </div>
+                  )}
                 </div>
-                <input type="text" value={entryActivity} onChange={e => setEntryActivity(e.target.value)} placeholder="Cosa hai fatto oggi?" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"/>
+                <input type="text" value={entryActivity} onChange={e => setEntryActivity(e.target.value)} placeholder="Cosa hai fatto oggi?" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
                 <button onClick={handleAddManualSession} disabled={saveStatus !== 'idle'} className={`w-full py-4 rounded-2xl text-white font-bold transition-all shadow-lg ${saveStatus === 'success' ? 'bg-green-500' : 'bg-blue-600 active:scale-95 shadow-blue-200'}`}>
                   {saveStatus === 'saving' ? <Loader2 className="animate-spin mx-auto"/> : saveStatus === 'success' ? <Check className="mx-auto"/> : 'Salva Registrazione'}
                 </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6"><WorkChart sessions={sessions} settings={settings}/></div>
+            <div className="bg-white rounded-3xl p-6 border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)] transition-all duration-300"><WorkChart sessions={sessions} settings={settings}/></div>
           </>
         )}
 
@@ -418,7 +454,7 @@ const App: React.FC = () => {
             <div className="bg-slate-800 rounded-2xl p-6 text-white shadow-lg flex justify-between items-center mb-6 mx-2">
                <div>
                   <div className="text-xs font-bold uppercase opacity-50 mb-1">Giorni di Presenza (Totale)</div>
-                  <div className="text-3xl font-black">{new Set(sessions.filter(s => ['work', 'operation', 'com_log'].includes(s.type)).map(s => new Date(s.startTime).toLocaleDateString())).size}</div>
+                  <div className="text-3xl font-black">{new Set(sessions.filter(s => ['work', 'servizio', 'operation', 'com_log'].includes(s.type)).map(s => new Date(s.startTime).toLocaleDateString())).size}</div>
                </div>
                <UserCheck size={32} className="text-blue-400 opacity-50"/>
             </div>
@@ -443,7 +479,7 @@ const App: React.FC = () => {
                       {sortedMonths.map(month => {
                         const monthSessions = yearData[month];
                         const monthName = new Date(year, month).toLocaleDateString('it-IT', { month: 'long' }).replace(/^\w/, c => c.toUpperCase());
-                        const presenceCount = new Set(monthSessions.filter(s => ['work', 'operation', 'com_log'].includes(s.type)).map(s => new Date(s.startTime).toLocaleDateString())).size;
+                        const presenceCount = new Set(monthSessions.filter(s => ['work', 'servizio', 'operation', 'com_log'].includes(s.type)).map(s => new Date(s.startTime).toLocaleDateString())).size;
                         const monthKey = `${year}-${month}`;
                         const isMonthExpanded = expandedMonth === monthKey;
 
