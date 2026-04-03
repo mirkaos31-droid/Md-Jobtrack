@@ -231,7 +231,7 @@ const App: React.FC = () => {
   const todayLocaleFormatted = currentDate.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
   const totalBalance = DateService.calculateTotalBalance(sessions, settings);
   const usedLeave = DateService.calculateUsedLeave(sessions);
-  const earnedDays = DateService.calculateEarnedDays(sessions);
+  const earnedDays = DateService.calculateEarnedDays(sessions, settings);
   
   const ordinariaKeys = Object.keys(settings.leaveBalances)
     .filter(k => k.startsWith('ord_'))
@@ -326,7 +326,7 @@ const App: React.FC = () => {
 
                 <div className="snap-center shrink-0 bg-gradient-to-br from-pink-600 to-pink-700 rounded-2xl shadow-md shadow-pink-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
                   <div className="flex items-center gap-2 mb-3"><MapPin size={18}/><span className="text-[10px] font-bold uppercase">Com. Log.</span></div>
-                  <div><div className="text-2xl font-bold">{(settings.leaveBalances.com_log - (usedLeave.com_log || 0)).toFixed(0)} <span className="text-sm opacity-80">h</span></div>
+                  <div><div className="text-2xl font-bold">{(settings.leaveBalances.com_log + earnedDays.com_log - (usedLeave.com_log || 0)).toFixed(0)} <span className="text-sm opacity-80">h</span></div>
                   <div className="text-[10px] opacity-70">Su {settings.leaveBalances.com_log} h</div></div>
                 </div>
 

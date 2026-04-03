@@ -47,13 +47,30 @@ export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSet
     } else if (hasRecComp) {
       balance -= target;
     } else {
-      let dailyCreditedDuration = 0;
+      let workHours = 0;
+      let comLogHours = 0;
       daySessions.forEach(s => {
-        if ((s.type === 'work' || s.type === 'servizio' || s.type === 'com_log') && s.endTime) {
-          dailyCreditedDuration += (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
+        if (s.endTime) {
+          const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
+          if (s.type === 'work' || s.type === 'servizio') {
+            workHours += hours;
+          } else if (s.type === 'com_log') {
+            comLogHours += hours;
+          }
         }
       });
-      balance += (dailyCreditedDuration - target);
+      
+      const totalHours = workHours + comLogHours;
+      if (totalHours > 0 || daySessions.some(s => s.type === 'work' || s.type === 'servizio' || s.type === 'com_log')) {
+         const extra = totalHours - target;
+         if (extra > 0) {
+            const earnedComLog = Math.min(extra, comLogHours);
+            const earnedOrdinary = extra - earnedComLog;
+            balance += earnedOrdinary;
+         } else {
+            balance += extra; // negative
+         }
+      }
     }
   });
 
@@ -64,30 +81,56 @@ export const calculateUsedLeave = (sessions: WorkSession[]) => {
   const usage: Record<string, number> = {};
 
   sessions.forEach(s => {
-    if (['work', 'servizio', 'rec_comp', 'operation'].includes(s.type)) return;
+    if (['work', 'servizio', 'rec_comp', 'operation', 'com_log'].includes(s.type)) return;
     
-    if (s.type === 'com_log') {
-      if (s.endTime) {
-        const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
-        usage.com_log = (usage.com_log || 0) + hours;
-      }
-    } else {
-      usage[s.type] = (usage[s.type] || 0) + 1;
-    }
+    usage[s.type] = (usage[s.type] || 0) + 1;
   });
 
   return usage;
 };
 
-export const calculateEarnedDays = (sessions: WorkSession[]) => {
+export const calculateEarnedDays = (sessions: WorkSession[], settings: UserSettings) => {
   const uniqueWorkHolidays = new Set<string>();
+  
+  const sessionsByDay = new Map<string, WorkSession[]>();
+  
   sessions.forEach(s => {
     const date = new Date(s.startTime);
     const day = date.getDay();
-    // Include work done on Holidays, Saturdays (6), or Sundays (0)
     if ((s.type === 'work' || s.type === 'servizio') && (isHoliday(date) || day === 0 || day === 6)) {
       uniqueWorkHolidays.add(date.toLocaleDateString('it-IT'));
     }
+    
+    const dateKey = date.toLocaleDateString('sv-SE'); 
+    if (!sessionsByDay.has(dateKey)) sessionsByDay.set(dateKey, []);
+    sessionsByDay.get(dateKey)!.push(s);
   });
-  return { rec_fest: uniqueWorkHolidays.size };
+
+  let earnedComLog = 0;
+  sessionsByDay.forEach((daySessions, dateStr) => {
+    const target = getTargetHoursForDate(dateStr, settings);
+    const hasFullDayLeave = daySessions.some(s => s.type.startsWith('ord_') || ['lic_937', 'rec_fest', 'operation', 'rec_comp'].includes(s.type));
+    
+    if (hasFullDayLeave) return;
+
+    let workHours = 0;
+    let comLogHours = 0;
+    daySessions.forEach(s => {
+      if (s.endTime) {
+        const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
+        if (s.type === 'work' || s.type === 'servizio') {
+          workHours += hours;
+        } else if (s.type === 'com_log') {
+          comLogHours += hours;
+        }
+      }
+    });
+    
+    const totalHours = workHours + comLogHours;
+    if (totalHours > target && comLogHours > 0) {
+       earnedComLog += Math.min(totalHours - target, comLogHours);
+    }
+  });
+
+  return { rec_fest: uniqueWorkHolidays.size, com_log: earnedComLog };
 };
