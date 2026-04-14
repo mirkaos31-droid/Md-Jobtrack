@@ -37,6 +37,9 @@ const App: React.FC = () => {
   const [expandedYear, setExpandedYear] = useState<number | null>(null);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [resetConfirm, setResetConfirm] = useState(false);
+
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ date: string; startTime: string; endTime: string; activity: string; } | null>(null);
   const [activityText, setActivityText] = useState('');
@@ -50,7 +53,6 @@ const App: React.FC = () => {
     const loadedDraft = Storage.loadDraft();
 
     if (loadedDraft) {
-      if (loadedDraft.entryDate) setEntryDate(loadedDraft.entryDate);
       if (loadedDraft.entryStart) setEntryStart(loadedDraft.entryStart);
       if (loadedDraft.entryEnd) setEntryEnd(loadedDraft.entryEnd);
       if (loadedDraft.entryType) setEntryType(loadedDraft.entryType);
@@ -225,7 +227,8 @@ const App: React.FC = () => {
   };
 
   const handleDeleteSession = (id: string) => {
-    if (confirm("Eliminare?")) setSessions(prev => prev.filter(s => s.id !== id));
+    setSessions(prev => prev.filter(s => s.id !== id));
+    setSessionToDelete(null);
   };
 
   const todayLocaleFormatted = currentDate.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
@@ -440,7 +443,7 @@ const App: React.FC = () => {
                     <div className="text-xs font-bold text-slate-400 uppercase">{new Date(op.startTime).toLocaleDateString('it-IT')}</div>
                     <div className="text-sm font-bold text-emerald-700">{op.activityRaw}</div>
                   </div>
-                  <button onClick={() => handleDeleteSession(op.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+                  <button onClick={() => setSessionToDelete(op.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
                 </div>
               ))}
             </div>
@@ -517,11 +520,16 @@ const App: React.FC = () => {
                                           </div>
                                           <div className="text-sm font-medium leading-tight">{s.activityRefined || s.activityRaw || "Nessuna nota"}</div>
                                         </div>
-                                        {s.endTime && (
-                                          <div className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2 whitespace-nowrap">
-                                            {((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000).toFixed(1)}h
-                                          </div>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                          {s.endTime && (
+                                            <div className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                              {((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000).toFixed(1)}h
+                                            </div>
+                                          )}
+                                          <button onClick={() => setSessionToDelete(s.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
+                                            <Trash2 size={16}/>
+                                          </button>
+                                        </div>
                                      </div>
                                  ))}
                                </div>
@@ -573,7 +581,7 @@ const App: React.FC = () => {
                  <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Monte Ore Iniziale (h)</label><input type="number" value={settings.leaveBalances.rec_comp} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
                </div>
              </section>
-             <button onClick={() => { if(confirm('Svuotare tutto?')) setSessions([]); Storage.saveSessions([]); }} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline"><Trash2 size={14}/> Reset Totale Database</button>
+             <button onClick={() => setResetConfirm(true)} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline"><Trash2 size={14}/> Reset Totale Database</button>
            </div>
         )}
       </main>
@@ -597,6 +605,31 @@ const App: React.FC = () => {
            <button key={v} onClick={() => setView(v)} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${view === v ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>{v === 'salary' ? 'Cash' : v === 'dashboard' ? 'Home' : v}</button>
          ))}
       </div>
+      {sessionToDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Elimina Registrazione</h3>
+            <p className="text-slate-500 mb-6">Sei sicuro di voler eliminare questa registrazione? L'azione non può essere annullata.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setSessionToDelete(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-all">Annulla</button>
+              <button onClick={() => handleDeleteSession(sessionToDelete)} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl active:scale-95 transition-all shadow-md shadow-red-200">Elimina</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Reset Database</h3>
+            <p className="text-slate-500 mb-6">Sei sicuro di voler svuotare tutto il database? Questa azione eliminerà tutte le registrazioni e non può essere annullata.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-all">Annulla</button>
+              <button onClick={() => { setSessions([]); Storage.saveSessions([]); setResetConfirm(false); }} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl active:scale-95 transition-all shadow-md shadow-red-200">Svuota Tutto</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
