@@ -1,7 +1,7 @@
 
 {
-  "name": "WorkLog",
-  "short_name": "WorkLog",
+  "name": "JobTrack",
+  "short_name": "JobTrack",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f1f5f9",

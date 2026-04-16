@@ -282,7 +282,7 @@ const App: React.FC = () => {
             <div className="bg-white/20 backdrop-blur-sm p-1.5 rounded-lg text-white">
               <Clock size={20} strokeWidth={2.5} />
             </div>
-            <h1 className="font-bold text-xl tracking-tight text-white">WorkLog</h1>
+            <h1 className="font-bold text-xl tracking-tight text-white">JobTrack</h1>
           </div>
           <div className="text-xs font-semibold px-2.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-blue-50 border border-white/10">{todayLocaleFormatted}</div>
         </div>
@@ -319,18 +319,18 @@ const App: React.FC = () => {
 
                 <div className="snap-center shrink-0 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl shadow-md shadow-purple-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
                   <div className="flex items-center gap-2 mb-3"><Award size={18}/><span className="text-[10px] font-bold uppercase">Lic. 937</span></div>
-                  <div><div className="text-2xl font-bold">{(settings.leaveBalances.lic_937 - (usedLeave.lic_937 || 0)).toFixed(0)} <span className="text-sm opacity-80">gg</span></div></div>
+                  <div><div className="text-2xl font-bold">{((settings.leaveBalances.lic_937 || 0) - (usedLeave.lic_937 || 0)).toFixed(0)} <span className="text-sm opacity-80">gg</span></div></div>
                 </div>
 
                 <div className="snap-center shrink-0 bg-gradient-to-br from-orange-600 to-orange-700 rounded-2xl shadow-md shadow-orange-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
                   <div className="flex items-center gap-2 mb-3"><RotateCcw size={18}/><span className="text-[10px] font-bold uppercase">Rec. Fest.</span></div>
-                  <div><div className="text-2xl font-bold">{(settings.leaveBalances.rec_fest + earnedDays.rec_fest - (usedLeave.rec_fest || 0)).toFixed(0)} <span className="text-sm opacity-80">gg</span></div></div>
+                  <div><div className="text-2xl font-bold">{((settings.leaveBalances.rec_fest || 0) + (earnedDays.rec_fest || 0) - (usedLeave.rec_fest || 0)).toFixed(0)} <span className="text-sm opacity-80">gg</span></div></div>
                 </div>
 
                 <div className="snap-center shrink-0 bg-gradient-to-br from-pink-600 to-pink-700 rounded-2xl shadow-md shadow-pink-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
                   <div className="flex items-center gap-2 mb-3"><MapPin size={18}/><span className="text-[10px] font-bold uppercase">Com. Log.</span></div>
-                  <div><div className="text-2xl font-bold">{(settings.leaveBalances.com_log + earnedDays.com_log - (usedLeave.com_log || 0)).toFixed(0)} <span className="text-sm opacity-80">h</span></div>
-                  <div className="text-[10px] opacity-70">Su {settings.leaveBalances.com_log} h</div></div>
+                  <div><div className="text-2xl font-bold">{((settings.leaveBalances.com_log || 0) + (earnedDays.com_log || 0) - (usedLeave.com_log || 0)).toFixed(0)} <span className="text-sm opacity-80">h</span></div>
+                  <div className="text-[10px] opacity-70">Su {settings.leaveBalances.com_log || 0} h</div></div>
                 </div>
 
               </div>
@@ -576,9 +576,10 @@ const App: React.FC = () => {
                     </button>
                  )}
 
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Licenza 937 (gg)</label><input type="number" value={settings.leaveBalances.lic_937} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, lic_937: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Com. Log (h)</label><input type="number" value={settings.leaveBalances.com_log} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, com_log: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Monte Ore Iniziale (h)</label><input type="number" value={settings.leaveBalances.rec_comp} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Licenza 937 (gg)</label><input type="number" value={settings.leaveBalances.lic_937 || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, lic_937: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Rec. Fest. Iniziale (gg)</label><input type="number" value={settings.leaveBalances.rec_fest || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_fest: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Com. Log (h)</label><input type="number" value={settings.leaveBalances.com_log || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, com_log: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Monte Ore Iniziale (h)</label><input type="number" value={settings.leaveBalances.rec_comp || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
                </div>
              </section>
              <button onClick={() => setResetConfirm(true)} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline"><Trash2 size={14}/> Reset Totale Database</button>
