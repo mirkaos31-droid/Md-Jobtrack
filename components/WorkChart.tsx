@@ -9,31 +9,47 @@ interface WorkChartProps {
 }
 
 // Color palette matching App.tsx styling
-const TYPE_COLORS: Record<string, string> = {
+const BASE_COLORS: Record<string, string> = {
   work: '#334155',      // Slate-700 (Lavoro standard)
   servizio: '#4338ca',  // Indigo-700 (Servizio)
   com_log: '#db2777',   // Pink-600 (Com. Log.)
   operation: '#059669', // Emerald-600 (Operazione)
-  ord_2025: '#2563eb',  // Blue-600 (Ord 2025)
-  ord_2026: '#4f46e5',  // Indigo-600 (Ord 2026)
   lic_937: '#7e22ce',   // Purple-700 (Lic 937)
   rec_fest: '#c2410c',  // Orange-700 (Rec Fest)
   rec_comp: '#0d9488',  // Teal-600 (Rec Comp)
 };
 
-const TYPE_LABELS: Record<string, string> = {
+const BASE_LABELS: Record<string, string> = {
   work: 'Lavoro',
   servizio: 'Servizio',
   com_log: 'Com. Log.',
   operation: 'Operazione',
-  ord_2025: 'Ord. 25',
-  ord_2026: 'Ord. 26',
   lic_937: 'Lic. 937',
   rec_fest: 'Rec. Fest.',
   rec_comp: 'Rec. Comp.',
 };
 
 const WorkChart: React.FC<WorkChartProps> = ({ sessions, settings }) => {
+  // Generate dynamic colors and labels for ordinary leave based on settings
+  const dynamicConfig = useMemo(() => {
+    const colors = { ...BASE_COLORS };
+    const labels = { ...BASE_LABELS };
+    
+    // Assign blue/indigo shades to dynamically found 'ord_YYYY' keys
+    const ordKeys = Object.keys(settings.leaveBalances).filter(k => k.startsWith('ord_')).sort();
+    const ordColors = ['#2563eb', '#4f46e5', '#3b82f6', '#6366f1']; // Fallback colors
+    
+    ordKeys.forEach((key, index) => {
+      const year = key.split('_')[1];
+      colors[key] = ordColors[index % ordColors.length];
+      labels[key] = `Ord. ${year.slice(-2)}`;
+    });
+    
+    return { colors, labels };
+  }, [settings.leaveBalances]);
+
+  const { colors: TYPE_COLORS, labels: TYPE_LABELS } = dynamicConfig;
+
   const data = useMemo(() => {
     // 1. Initialize map for last 7 days
     const dayMap = new Map<string, any>();
@@ -44,8 +60,8 @@ const WorkChart: React.FC<WorkChartProps> = ({ sessions, settings }) => {
       d.setDate(today.getDate() - i);
       const dateKey = d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
       
-      // Initialize structure with 0 for all types
-      dayMap.set(dateKey, {
+      // Initialize structure with 0 for all types dynamically
+      const dayData: any = {
         date: dateKey,
         dateFull: d.toISOString(),
         total: 0,
@@ -53,12 +69,17 @@ const WorkChart: React.FC<WorkChartProps> = ({ sessions, settings }) => {
         servizio: 0,
         com_log: 0,
         operation: 0,
-        ord_2025: 0,
-        ord_2026: 0,
         lic_937: 0,
         rec_fest: 0,
         rec_comp: 0
+      };
+      
+      // Inject ord keys dynamically
+      Object.keys(TYPE_COLORS).forEach(k => {
+        if (!dayData[k]) dayData[k] = 0;
       });
+      
+      dayMap.set(dateKey, dayData);
     }
 
     // 2. Aggregate hours by type

@@ -6,6 +6,7 @@ import * as Storage from './services/storageService';
 import * as GeminiService from './services/geminiService';
 import * as DateService from './services/dateService';
 import WorkChart from './components/WorkChart';
+import SmartCoach from './components/SmartCoach';
 
 const App: React.FC = () => {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
@@ -134,6 +135,22 @@ const App: React.FC = () => {
   useEffect(() => {
     Storage.saveSalaries(salaries);
   }, [salaries]);
+
+  // Dynamic Theme (Light during day, Dark at night)
+  useEffect(() => {
+    const checkTheme = () => {
+      const hour = new Date().getHours();
+      const isNight = hour >= 18 || hour < 6;
+      if (isNight) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    checkTheme();
+    const interval = setInterval(checkTheme, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     Storage.saveDraft({ entryDate, entryStart, entryEnd, entryType, entryActivity });
@@ -274,21 +291,57 @@ const App: React.FC = () => {
 
   const sortedYears = Object.keys(historyData).map(Number).sort((a, b) => b - a);
 
+  const getSessionHoursDisplay = (s: WorkSession) => {
+    if (s.type === 'rec_comp') {
+      const target = DateService.getTargetHoursForDate(s.startTime, settings);
+      return <span className="text-red-500 font-bold">-{target.toFixed(1)}h</span>;
+    }
+    
+    if (!s.endTime) return null;
+    
+    if (s.type === 'servizio') {
+       const start = new Date(s.startTime);
+       const end = new Date(s.endTime);
+       const day = start.getDay();
+       const isHol = DateService.isHoliday(start);
+       
+       if (isHol || day === 0 || day === 6) {
+           return ((end.getTime() - start.getTime()) / 3600000).toFixed(1) + 'h';
+       }
+       
+       const threshold = new Date(start);
+       if (day === 5) {
+           threshold.setHours(12, 0, 0, 0);
+       } else {
+           threshold.setHours(16, 30, 0, 0);
+       }
+       
+       const validStart = Math.max(start.getTime(), threshold.getTime());
+       const diff = end.getTime() - validStart;
+       if (diff > 0) {
+           return (diff / 3600000).toFixed(1) + 'h';
+       }
+       return '0.0h';
+    }
+    
+    return ((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000).toFixed(1) + 'h';
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100 pb-20 md:pb-0">
-      <header className="bg-gradient-to-r from-blue-700 to-indigo-800 border-b border-indigo-900/10 sticky top-0 z-20 shadow-lg">
+    <div className="min-h-screen bg-slate-50 dark:bg-mesh-dark dark:bg-[#020617] text-slate-800 dark:text-slate-200 pb-20 md:pb-0 font-sans selection:bg-cyan-500/30 transition-colors duration-500">
+      <header className="glass-card border-b border-indigo-900/10 dark:border-white/10 sticky top-0 z-20 shadow-lg dark:shadow-xl transition-all duration-500">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-white/20 backdrop-blur-sm p-1.5 rounded-lg text-white">
-              <Clock size={20} strokeWidth={2.5} />
+            <div className="bg-blue-600/10 dark:bg-cyan-500/20 shadow-[0_0_15px_rgba(37,99,235,0.2)] dark:shadow-[0_0_15px_rgba(6,182,212,0.4)] backdrop-blur-sm p-1.5 rounded-lg text-blue-600 dark:text-cyan-400 border border-blue-600/20 dark:border-cyan-500/30">
+              <Clock size={20} className="dark:drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" strokeWidth={2.5} />
             </div>
-            <h1 className="font-bold text-xl tracking-tight text-white">JobTrack</h1>
+            <h1 className="font-bold text-xl tracking-tight text-slate-800 dark:text-white drop-shadow-sm dark:drop-shadow-md">JobTrack</h1>
           </div>
-          <div className="text-xs font-semibold px-2.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-blue-50 border border-white/10">{todayLocaleFormatted}</div>
+          <div className="text-xs font-semibold px-2.5 py-1 bg-black/5 dark:bg-white/5 backdrop-blur-md rounded-full text-slate-600 dark:text-slate-300 border border-black/5 dark:border-white/10 shadow-inner">{todayLocaleFormatted}</div>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-4 space-y-6">
+      <main className="max-w-3xl mx-auto p-4 space-y-6 relative z-10">
         {view === 'dashboard' && (
           <>
             <div className="overflow-x-auto pb-6 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory">
@@ -336,15 +389,17 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className={`bg-white rounded-2xl p-6 flex flex-col items-center justify-center text-center border-2 transition-all duration-300 ${totalBalance >= 0 ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.4)]' : 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.4)]'}`}>
-               <div className="flex items-center gap-2 text-slate-500 mb-2"><Briefcase size={20}/><span className="text-sm font-bold uppercase tracking-widest">Monte Ore</span></div>
-               <div className={`text-5xl font-black tracking-tight ${totalBalance >= 0 ? 'text-green-600 drop-shadow-[0_0_10px_rgba(74,222,128,0.4)]' : 'text-red-600 drop-shadow-[0_0_10px_rgba(248,113,113,0.4)]'}`}>{totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)}h</div>
+            <div className={`bg-white rounded-2xl p-6 flex flex-col items-center justify-center text-center border-2 transition-all duration-300 glass-card border-none text-white ${totalBalance >= 0 ? 'shadow-[0_0_20px_rgba(74,222,128,0.2)] bg-green-500/10' : 'shadow-[0_0_20px_rgba(248,113,113,0.2)] bg-red-500/10'}`}>
+               <div className={`flex items-center gap-2 mb-2 ${totalBalance >= 0 ? 'text-green-300' : 'text-red-300'}`}><Briefcase size={20}/><span className="text-sm font-bold uppercase tracking-widest">Monte Ore</span></div>
+               <div className={`text-5xl font-black tracking-tight ${totalBalance >= 0 ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.4)]' : 'text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.4)]'}`}>{totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)}h</div>
             </div>
 
-            <div className="bg-white rounded-3xl p-6 space-y-5 border-2 border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.4)] transition-all duration-300">
-              <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                <div className="bg-blue-50 text-blue-600 p-2 rounded-xl"><Plus size={20}/></div>
-                <h3 className="font-bold text-slate-800">Nuova Registrazione</h3>
+            <SmartCoach sessions={sessions} balances={{totalRecuperi: totalBalance}} settings={settings} />
+
+            <div className="glass-card rounded-3xl p-6 space-y-5 border-2 border-blue-400/30 shadow-[0_0_20px_rgba(96,165,250,0.15)] transition-all duration-300">
+              <div className="flex items-center gap-3 border-b border-slate-700/50 pb-4">
+                <div className="bg-blue-500/20 text-blue-400 p-2 rounded-xl border border-blue-500/30"><Plus size={20}/></div>
+                <h3 className="font-bold text-slate-200">Nuova Registrazione</h3>
               </div>
               <div className="space-y-4">
                 <div className="min-w-0">
@@ -388,7 +443,7 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl p-6 border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)] transition-all duration-300"><WorkChart sessions={sessions} settings={settings}/></div>
+            <div className="glass-card bg-white dark:bg-slate-800/80 rounded-3xl p-6 border-2 border-yellow-400 dark:border-yellow-500/30 shadow-[0_0_20px_rgba(250,204,21,0.4)] dark:shadow-[0_0_20px_rgba(250,204,21,0.2)] transition-all duration-300"><WorkChart sessions={sessions} settings={settings}/></div>
           </>
         )}
 
@@ -399,7 +454,7 @@ const App: React.FC = () => {
                <div className="flex items-center gap-2 mb-4 opacity-80"><Wallet size={20}/> <span className="text-xs font-bold uppercase tracking-widest">Totale Quest'anno</span></div>
                <div className="text-4xl font-black">€ {salaries.filter(s => new Date(s.date).getFullYear() === new Date().getFullYear()).reduce((acc, s) => acc + s.amount, 0).toLocaleString()}</div>
             </div>
-            <div className="bg-white rounded-3xl p-6 shadow-md border border-amber-100 space-y-4">
+            <div className="glass-card bg-white dark:bg-slate-800/80 rounded-3xl p-6 shadow-md border border-amber-100 dark:border-white/10 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <input type="date" value={salaryDate} onChange={e => setSalaryDate(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
                 <input type="number" value={salaryAmount} onChange={e => setSalaryAmount(e.target.value)} placeholder="Importo €" className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
@@ -409,7 +464,7 @@ const App: React.FC = () => {
             </div>
             <div className="space-y-3">
               {salaries.sort((a,b) => b.date.localeCompare(a.date)).map(s => (
-                <div key={s.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm">
+                <div key={s.id} className="glass-card bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-100 dark:border-white/5 flex justify-between items-center shadow-sm">
                   <div>
                     <div className="text-xs font-bold text-slate-400 uppercase">{new Date(s.date).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</div>
                     <div className="text-lg font-bold text-amber-600">€ {s.amount.toFixed(2)}</div>
@@ -428,7 +483,7 @@ const App: React.FC = () => {
                <div className="flex items-center gap-2 mb-4 opacity-80"><MapPin size={20}/> <span className="text-xs font-bold uppercase tracking-widest">Totale Missioni</span></div>
                <div className="text-4xl font-black">{sessions.filter(s => s.type === 'operation').length}</div>
             </div>
-            <div className="bg-white rounded-3xl p-6 shadow-md border border-emerald-100 space-y-4">
+            <div className="glass-card bg-white dark:bg-slate-800/80 rounded-3xl p-6 shadow-md border border-emerald-100 dark:border-white/10 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <input type="date" value={opStartDate} onChange={e => setOpStartDate(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
                 <input type="date" value={opEndDate} onChange={e => setOpEndDate(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
@@ -438,7 +493,7 @@ const App: React.FC = () => {
             </div>
             <div className="space-y-3">
               {sessions.filter(s => s.type === 'operation').slice().reverse().map(op => (
-                <div key={op.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm">
+                <div key={op.id} className="glass-card bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-100 dark:border-white/5 flex justify-between items-center shadow-sm">
                   <div>
                     <div className="text-xs font-bold text-slate-400 uppercase">{new Date(op.startTime).toLocaleDateString('it-IT')}</div>
                     <div className="text-sm font-bold text-emerald-700">{op.activityRaw}</div>
@@ -468,7 +523,7 @@ const App: React.FC = () => {
               const isYearExpanded = expandedYear === year;
 
               return (
-                <div key={year} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                <div key={year} className="bg-white dark:bg-slate-800/80 rounded-3xl shadow-sm border border-slate-200 dark:border-white/10 overflow-hidden">
                   <div 
                     onClick={() => setExpandedYear(isYearExpanded ? null : year)}
                     className="flex items-center justify-between p-4 bg-slate-50 cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-100"
@@ -490,7 +545,7 @@ const App: React.FC = () => {
                           <div key={month} className="border border-slate-200 rounded-2xl overflow-hidden">
                              <div 
                                 onClick={() => setExpandedMonth(isMonthExpanded ? null : monthKey)}
-                                className="flex items-center justify-between p-4 bg-white cursor-pointer hover:bg-blue-50/30 transition-colors"
+                                className="flex items-center justify-between p-4 bg-white dark:bg-transparent cursor-pointer hover:bg-blue-50/30 dark:hover:bg-white/5 transition-colors"
                              >
                                 <div className="flex items-center gap-3">
                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${presenceCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
@@ -511,7 +566,7 @@ const App: React.FC = () => {
                                  {monthSessions
                                    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
                                    .map(s => (
-                                     <div key={s.id} className={`p-3 rounded-xl border ${getTypeColor(s.type)} bg-white shadow-sm flex justify-between items-center`}>
+                                     <div key={s.id} className={`p-3 rounded-xl border ${getTypeColor(s.type)} bg-white dark:bg-slate-800/50 shadow-sm flex justify-between items-center`}>
                                         <div>
                                           <div className="flex items-center gap-2 mb-1">
                                             <div className="text-[10px] font-black uppercase text-slate-400">{new Date(s.startTime).toLocaleDateString('it-IT', { day: 'numeric', weekday: 'short' })}</div>
@@ -522,8 +577,8 @@ const App: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {s.endTime && (
-                                            <div className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                              {((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000).toFixed(1)}h
+                                            <div className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded whitespace-nowrap flex items-center">
+                                              {getSessionHoursDisplay(s)}
                                             </div>
                                           )}
                                           <button onClick={() => setSessionToDelete(s.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
@@ -554,7 +609,7 @@ const App: React.FC = () => {
         )}
 
         {view === 'settings' && (
-           <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-8 shadow-md">
+           <div className="glass-card bg-white dark:bg-slate-800/80 rounded-3xl p-6 border border-slate-200 dark:border-white/10 space-y-8 shadow-md">
              <h2 className="text-xl font-bold flex items-center gap-2"><Settings size={22} className="text-blue-600"/> Impostazioni</h2>
              
              <section className="space-y-4">
@@ -587,29 +642,29 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 pb-safe pt-2 flex justify-between items-end z-30 md:hidden h-20 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
+      <nav className="fixed bottom-0 left-0 w-full glass-card border-t border-white/10 px-2 pb-safe pt-2 flex justify-between items-end z-30 md:hidden h-20">
         <div className="flex justify-around w-full pb-2">
-            <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}><Clock size={20}/> Home</button>
-            <button onClick={() => setView('operations')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'operations' ? 'text-emerald-600' : 'text-slate-400'}`}><MapPin size={20}/> Op.</button>
+            <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'dashboard' ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-slate-400'}`}><Clock size={20}/> Home</button>
+            <button onClick={() => setView('operations')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'operations' ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'text-slate-400'}`}><MapPin size={20}/> Op.</button>
         </div>
         <div className="relative w-20 flex justify-center z-40">
-           <button onClick={() => setView('salary')} className={`absolute -top-20 w-16 h-16 rounded-full flex flex-col items-center justify-center text-white shadow-2xl border-[4px] border-white transition-all active:scale-90 ${view === 'salary' ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-amber-400 to-orange-500'}`}><Banknote size={24}/><span className="text-[10px] font-black mt-0.5">Cash</span></button>
+           <button onClick={() => setView('salary')} className={`absolute -top-20 w-16 h-16 rounded-full flex flex-col items-center justify-center text-white shadow-[0_0_20px_rgba(245,158,11,0.5)] border-[3px] border-slate-900 transition-all active:scale-90 ${view === 'salary' ? 'bg-gradient-to-br from-amber-400 to-orange-500 scale-105' : 'bg-gradient-to-br from-amber-500 to-orange-600 opacity-90'}`}><Banknote size={24}/><span className="text-[10px] font-black mt-0.5">Cash</span></button>
         </div>
         <div className="flex justify-around w-full pb-2">
-            <button onClick={() => setView('history')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'history' ? 'text-blue-600' : 'text-slate-400'}`}><Calendar size={20}/> Storico</button>
-            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'settings' ? 'text-blue-600' : 'text-slate-400'}`}><Settings size={20}/> Opz.</button>
+            <button onClick={() => setView('history')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'history' ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-slate-400'}`}><Calendar size={20}/> Storico</button>
+            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'settings' ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-slate-400'}`}><Settings size={20}/> Opz.</button>
         </div>
       </nav>
 
       <div className="hidden md:flex fixed top-4 right-4 z-20 gap-2">
          {['dashboard', 'operations', 'salary', 'history', 'settings'].map((v: any) => (
-           <button key={v} onClick={() => setView(v)} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${view === v ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>{v === 'salary' ? 'Cash' : v === 'dashboard' ? 'Home' : v}</button>
+           <button key={v} onClick={() => setView(v)} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${view === v ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'glass-button text-slate-300'}`}>{v === 'salary' ? 'Cash' : v === 'dashboard' ? 'Home' : v}</button>
          ))}
       </div>
       {sessionToDelete && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Elimina Registrazione</h3>
+          <div className="glass-card bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Elimina Registrazione</h3>
             <p className="text-slate-500 mb-6">Sei sicuro di voler eliminare questa registrazione? L'azione non può essere annullata.</p>
             <div className="flex gap-3">
               <button onClick={() => setSessionToDelete(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-all">Annulla</button>
@@ -621,8 +676,8 @@ const App: React.FC = () => {
 
       {resetConfirm && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Reset Database</h3>
+          <div className="glass-card bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Reset Database</h3>
             <p className="text-slate-500 mb-6">Sei sicuro di voler svuotare tutto il database? Questa azione eliminerà tutte le registrazioni e non può essere annullata.</p>
             <div className="flex gap-3">
               <button onClick={() => setResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-all">Annulla</button>
