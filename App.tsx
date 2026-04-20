@@ -3,10 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { WorkSession, UserSettings, SessionType, SalaryEntry } from './types';
 import * as Storage from './services/storageService';
-import * as GeminiService from './services/geminiService';
 import * as DateService from './services/dateService';
 import WorkChart from './components/WorkChart';
-import SmartCoach from './components/SmartCoach';
 
 const App: React.FC = () => {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
@@ -44,8 +42,6 @@ const App: React.FC = () => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ date: string; startTime: string; endTime: string; activity: string; } | null>(null);
   const [activityText, setActivityText] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiReport, setAiReport] = useState<string | null>(null);
 
   useEffect(() => {
     let loadedSessions = Storage.loadSessions();
@@ -201,15 +197,6 @@ const App: React.FC = () => {
     setEntryDate(new Date().toLocaleDateString('fr-CA'));
     setEntryType('work');
     setTimeout(() => setSaveStatus('idle'), 2000);
-    
-    if (entryActivity && (entryType === 'work' || finalType === 'servizio')) {
-       setIsAiLoading(true);
-       try {
-         const refined = await GeminiService.refineActivityText(entryActivity);
-         setSessions(prev => prev.map(s => s.id === newSession.id ? { ...s, activityRefined: refined } : s));
-       } catch(e) {}
-       setIsAiLoading(false);
-    }
   };
 
   const handleAddOperation = () => {
@@ -393,8 +380,6 @@ const App: React.FC = () => {
                <div className={`flex items-center gap-2 mb-2 ${totalBalance >= 0 ? 'text-green-300' : 'text-red-300'}`}><Briefcase size={20}/><span className="text-sm font-bold uppercase tracking-widest">Monte Ore</span></div>
                <div className={`text-5xl font-black tracking-tight ${totalBalance >= 0 ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.4)]' : 'text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.4)]'}`}>{totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)}h</div>
             </div>
-
-            <SmartCoach sessions={sessions} balances={{totalRecuperi: totalBalance}} settings={settings} />
 
             <div className="glass-card rounded-3xl p-6 space-y-5 border-2 border-blue-400/30 shadow-[0_0_20px_rgba(96,165,250,0.15)] transition-all duration-300">
               <div className="flex items-center gap-3 border-b border-slate-700/50 pb-4">
@@ -613,30 +598,38 @@ const App: React.FC = () => {
              <h2 className="text-xl font-bold flex items-center gap-2"><Settings size={22} className="text-blue-600"/> Impostazioni</h2>
              
              <section className="space-y-4">
-               <h3 className="text-xs font-bold uppercase text-slate-400 tracking-widest border-b pb-2">Bilanci Ferie</h3>
+               <h3 className="text-xs font-bold uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-700 pb-2">Bilanci Ferie</h3>
                <div className="grid grid-cols-2 gap-4">
                  {ordinariaKeys.map(k => (
                    <div key={k}>
-                     <label className="block text-[10px] font-bold text-slate-600 mb-1">{getTypeLabel(k)} (gg)</label>
-                     <input type="number" value={settings.leaveBalances[k]} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, [k]: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/>
+                     <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">{getTypeLabel(k)} (gg)</label>
+                     <input type="number" value={settings.leaveBalances[k]} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, [k]: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"/>
                    </div>
                  ))}
                  
                  {!settings.leaveBalances[prevYearKey] && (
                     <button 
                         onClick={() => setSettings(prev => ({...prev, leaveBalances: {...prev.leaveBalances, [prevYearKey]: 0}}))} 
-                        className="border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-400 font-bold text-xs hover:border-blue-300 hover:text-blue-500 transition-all p-3"
+                        className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-xl flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 font-bold text-xs hover:border-cyan-300 dark:hover:border-cyan-500/50 hover:text-cyan-500 transition-all p-3"
                     >
                         <Plus size={16}/> Aggiungi Ord. {currentYearNum - 1}
                     </button>
                  )}
 
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Licenza 937 (gg)</label><input type="number" value={settings.leaveBalances.lic_937 || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, lic_937: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Rec. Fest. Iniziale (gg)</label><input type="number" value={settings.leaveBalances.rec_fest || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_fest: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Com. Log (h)</label><input type="number" value={settings.leaveBalances.com_log || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, com_log: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
-                 <div><label className="block text-[10px] font-bold text-slate-600 mb-1">Monte Ore Iniziale (h)</label><input type="number" value={settings.leaveBalances.rec_comp || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Licenza 937 (gg)</label><input type="number" value={settings.leaveBalances.lic_937 || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, lic_937: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Rec. Fest. Iniziale (gg)</label><input type="number" value={settings.leaveBalances.rec_fest || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_fest: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Com. Log (h)</label><input type="number" value={settings.leaveBalances.com_log || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, com_log: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"/></div>
+                 <div><label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Monte Ore Iniziale (h)</label><input type="number" value={settings.leaveBalances.rec_comp || 0} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, rec_comp: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"/></div>
                </div>
              </section>
+
+             <section className="space-y-4">
+               <h3 className="text-xs font-bold uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-700 pb-2">Assistente IA</h3>
+               <div className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700/50 text-center">
+                  <p className="text-xs text-slate-500 font-medium">L'analisi IA è stata disattivata per mantenere l'app indipendente e senza costi. Tutti i tuoi dati restano salvati in locale nel tuo dispositivo.</p>
+               </div>
+             </section>
+
              <button onClick={() => setResetConfirm(true)} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline"><Trash2 size={14}/> Reset Totale Database</button>
            </div>
         )}
