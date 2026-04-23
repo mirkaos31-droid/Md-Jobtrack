@@ -48,28 +48,18 @@ export const calculateTotalBalance = (sessions: WorkSession[], settings: UserSet
       balance -= target;
     } else {
       let workHours = 0;
-      let comLogHours = 0;
       daySessions.forEach(s => {
         if (s.endTime) {
           const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
           if (s.type === 'work' || s.type === 'servizio') {
             workHours += hours;
-          } else if (s.type === 'com_log') {
-            comLogHours += hours;
           }
         }
       });
       
-      const totalHours = workHours + comLogHours;
-      if (totalHours > 0 || daySessions.some(s => s.type === 'work' || s.type === 'servizio' || s.type === 'com_log')) {
-         const extra = totalHours - target;
-         if (extra > 0) {
-            const earnedComLog = Math.min(extra, comLogHours);
-            const earnedOrdinary = extra - earnedComLog;
-            balance += earnedOrdinary;
-         } else {
-            balance += extra; // negative
-         }
+      const hasOrdinaryOrPaidWork = daySessions.some(s => s.type === 'work' || s.type === 'servizio' || s.type === 'com_log');
+      if (hasOrdinaryOrPaidWork) {
+         balance += (workHours - target);
       }
     }
   });
@@ -108,28 +98,19 @@ export const calculateEarnedDays = (sessions: WorkSession[], settings: UserSetti
 
   let earnedComLog = 0;
   sessionsByDay.forEach((daySessions, dateStr) => {
-    const target = getTargetHoursForDate(dateStr, settings);
     const hasFullDayLeave = daySessions.some(s => s.type.startsWith('ord_') || ['lic_937', 'rec_fest', 'operation', 'rec_comp'].includes(s.type));
     
     if (hasFullDayLeave) return;
 
-    let workHours = 0;
     let comLogHours = 0;
     daySessions.forEach(s => {
-      if (s.endTime) {
+      if (s.endTime && s.type === 'com_log') {
         const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
-        if (s.type === 'work' || s.type === 'servizio') {
-          workHours += hours;
-        } else if (s.type === 'com_log') {
-          comLogHours += hours;
-        }
+        comLogHours += hours;
       }
     });
     
-    const totalHours = workHours + comLogHours;
-    if (totalHours > target && comLogHours > 0) {
-       earnedComLog += Math.min(totalHours - target, comLogHours);
-    }
+    earnedComLog += comLogHours;
   });
 
   return { rec_fest: uniqueWorkHolidays.size, com_log: earnedComLog };
