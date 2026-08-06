@@ -1,9 +1,10 @@
 
-import { WorkSession, UserSettings, SalaryEntry } from '../types';
+import { WorkSession, UserSettings, SalaryEntry, MoneyTransaction } from '../types';
 
 const SESSIONS_KEY = 'jobtrack_sessions';
 const SETTINGS_KEY = 'jobtrack_settings';
 const SALARIES_KEY = 'jobtrack_salaries';
+const TRANSACTIONS_KEY = 'jobtrack_money_transactions';
 
 const currentYear = new Date().getFullYear();
 const DEFAULT_SETTINGS: UserSettings = {
@@ -14,6 +15,13 @@ const DEFAULT_SETTINGS: UserSettings = {
     rec_fest: 0,
     com_log: 0,
     rec_comp: 0
+  },
+  categoryBudgets: {
+    casa_bollette: 500,
+    spesa_cibo: 350,
+    svago_tempo_libero: 200,
+    trasporti_auto: 150,
+    abbonamenti: 50
   }
 };
 
@@ -39,6 +47,42 @@ export const loadSettings = (): UserSettings => {
 
 export const saveSettings = (settings: UserSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+};
+
+export const loadTransactions = (): MoneyTransaction[] => {
+  try {
+    const data = localStorage.getItem(TRANSACTIONS_KEY);
+    if (data) {
+      return JSON.parse(data);
+    }
+    
+    // Migration: Check if old salary entries exist
+    const oldSalariesData = localStorage.getItem(SALARIES_KEY);
+    if (oldSalariesData) {
+      const oldSalaries: SalaryEntry[] = JSON.parse(oldSalariesData);
+      const migrated: MoneyTransaction[] = oldSalaries.map(s => ({
+        id: s.id || crypto.randomUUID(),
+        date: s.date,
+        amount: s.amount,
+        type: 'income',
+        category: 'stipendio',
+        title: s.note || 'Stipendio / Accredito Lavoro',
+        note: s.note,
+        isRecurring: true
+      }));
+      if (migrated.length > 0) {
+        localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+    }
+    return [];
+  } catch (e) { 
+    return []; 
+  }
+};
+
+export const saveTransactions = (transactions: MoneyTransaction[]) => {
+  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
 };
 
 export const loadSalaries = (): SalaryEntry[] => {

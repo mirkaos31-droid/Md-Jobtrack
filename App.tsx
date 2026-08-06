@@ -1,20 +1,21 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
-import { WorkSession, UserSettings, SessionType, SalaryEntry } from './types';
+import { WorkSession, UserSettings, SessionType, MoneyTransaction } from './types';
 import * as Storage from './services/storageService';
 import * as DateService from './services/dateService';
 import WorkChart from './components/WorkChart';
+import MyMoney from './components/MyMoney';
 
 const App: React.FC = () => {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
-  const [salaries, setSalaries] = useState<SalaryEntry[]>([]);
+  const [transactions, setTransactions] = useState<MoneyTransaction[]>([]);
   const [settings, setSettings] = useState<UserSettings>({ 
     schedule: { monThu: 8.5, fri: 4, satSun: 0 },
     leaveBalances: {}
   });
   
-  const [view, setView] = useState<'dashboard' | 'history' | 'operations' | 'settings' | 'salary'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'history' | 'operations' | 'settings' | 'mymoney'>('dashboard');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
   
@@ -27,10 +28,6 @@ const App: React.FC = () => {
   const [opStartDate, setOpStartDate] = useState(new Date().toLocaleDateString('fr-CA'));
   const [opEndDate, setOpEndDate] = useState(new Date().toLocaleDateString('fr-CA'));
   const [opLocation, setOpLocation] = useState('');
-
-  const [salaryDate, setSalaryDate] = useState(new Date().toLocaleDateString('fr-CA'));
-  const [salaryAmount, setSalaryAmount] = useState('');
-  const [salaryNote, setSalaryNote] = useState('');
 
   // History View State
   const [expandedYear, setExpandedYear] = useState<number | null>(null);
@@ -45,9 +42,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let loadedSessions = Storage.loadSessions();
-    const loadedSalaries = Storage.loadSalaries();
+    const loadedTransactions = Storage.loadTransactions();
     let loadedSettings = Storage.loadSettings();
     const loadedDraft = Storage.loadDraft();
+
+    setTransactions(loadedTransactions);
 
     if (loadedDraft) {
       if (loadedDraft.entryStart) setEntryStart(loadedDraft.entryStart);
@@ -85,15 +84,6 @@ const App: React.FC = () => {
         const year = parseInt(key.split('_')[1]);
         const initial = balances[key];
         
-        // Remove past years if exhausted
-        if (year < currentYear) {
-          const spent = used[key] || 0;
-          if (initial - spent <= 0) {
-            delete balances[key];
-            changed = true;
-          }
-        }
-        
         // Remove future years if they are 0
         if (year > currentYear && initial === 0) {
           delete balances[key];
@@ -109,7 +99,6 @@ const App: React.FC = () => {
 
     setSessions(loadedSessions);
     setSettings(loadedSettings);
-    setSalaries(loadedSalaries);
     
     // Set default expanded year to current year
     setExpandedYear(currentYear);
@@ -127,10 +116,6 @@ const App: React.FC = () => {
   useEffect(() => {
     Storage.saveSettings(settings);
   }, [settings]);
-
-  useEffect(() => {
-    Storage.saveSalaries(salaries);
-  }, [salaries]);
 
   // Dynamic Theme (Light during day, Dark at night)
   useEffect(() => {
@@ -223,11 +208,9 @@ const App: React.FC = () => {
     setOpLocation('');
   };
 
-  const handleAddSalary = () => {
-    if (!salaryAmount || !salaryDate) return;
-    setSalaries(prev => [...prev, { id: crypto.randomUUID(), date: salaryDate, amount: parseFloat(salaryAmount), note: salaryNote }]);
-    setSalaryAmount('');
-    setSalaryNote('');
+  const handleSaveTransactions = (updated: MoneyTransaction[]) => {
+    setTransactions(updated);
+    Storage.saveTransactions(updated);
   };
 
   const handleDeleteSession = (id: string) => {
@@ -240,12 +223,18 @@ const App: React.FC = () => {
   const usedLeave = DateService.calculateUsedLeave(sessions);
   const earnedDays = DateService.calculateEarnedDays(sessions, settings);
   
-  const ordinariaKeys = Object.keys(settings.leaveBalances)
-    .filter(k => k.startsWith('ord_'))
-    .sort((a, b) => a.localeCompare(b));
-
   const currentYearNum = new Date().getFullYear();
   const prevYearKey = `ord_${currentYearNum - 1}`;
+
+  const ordinariaKeys = Object.keys(settings.leaveBalances)
+    .filter(k => {
+      if (!k.startsWith('ord_')) return false;
+      const year = parseInt(k.split('_')[1]);
+      const initial = settings.leaveBalances[k] || 0;
+      const spent = usedLeave[k] || 0;
+      return (initial - spent) > 0 || year >= currentYearNum;
+    })
+    .sort((a, b) => a.localeCompare(b));
 
   const getTypeLabel = (type: string) => {
     if (type.startsWith('ord_')) return `Ord. ${type.split('_')[1].slice(-2)}`;
@@ -432,33 +421,11 @@ const App: React.FC = () => {
           </>
         )}
 
-        {view === 'salary' && (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-               <div className="flex items-center gap-2 mb-4 opacity-80"><Wallet size={20}/> <span className="text-xs font-bold uppercase tracking-widest">Totale Quest'anno</span></div>
-               <div className="text-4xl font-black">€ {salaries.filter(s => new Date(s.date).getFullYear() === new Date().getFullYear()).reduce((acc, s) => acc + s.amount, 0).toLocaleString()}</div>
-            </div>
-            <div className="glass-card bg-white dark:bg-slate-800/80 rounded-3xl p-6 shadow-md border border-amber-100 dark:border-white/10 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <input type="date" value={salaryDate} onChange={e => setSalaryDate(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
-                <input type="number" value={salaryAmount} onChange={e => setSalaryAmount(e.target.value)} placeholder="Importo €" className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
-              </div>
-              <input type="text" value={salaryNote} onChange={e => setSalaryNote(e.target.value)} placeholder="Note (es. Bonus)" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"/>
-              <button onClick={handleAddSalary} className="w-full py-3 bg-amber-500 text-white font-bold rounded-xl active:scale-95 transition-all shadow-md shadow-amber-200">Registra Cash</button>
-            </div>
-            <div className="space-y-3">
-              {salaries.sort((a,b) => b.date.localeCompare(a.date)).map(s => (
-                <div key={s.id} className="glass-card bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-100 dark:border-white/5 flex justify-between items-center shadow-sm">
-                  <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase">{new Date(s.date).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</div>
-                    <div className="text-lg font-bold text-amber-600">€ {s.amount.toFixed(2)}</div>
-                  </div>
-                  <button onClick={() => setSalaries(prev => prev.filter(x => x.id !== s.id))} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
-                </div>
-              ))}
-            </div>
-          </div>
+        {view === 'mymoney' && (
+          <MyMoney 
+            transactions={transactions} 
+            onSaveTransactions={handleSaveTransactions} 
+          />
         )}
 
         {view === 'operations' && (
@@ -641,7 +608,7 @@ const App: React.FC = () => {
             <button onClick={() => setView('operations')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'operations' ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'text-slate-400'}`}><MapPin size={20}/> Op.</button>
         </div>
         <div className="relative w-20 flex justify-center z-40">
-           <button onClick={() => setView('salary')} className={`absolute -top-20 w-16 h-16 rounded-full flex flex-col items-center justify-center text-white shadow-[0_0_20px_rgba(245,158,11,0.5)] border-[3px] border-slate-900 transition-all active:scale-90 ${view === 'salary' ? 'bg-gradient-to-br from-amber-400 to-orange-500 scale-105' : 'bg-gradient-to-br from-amber-500 to-orange-600 opacity-90'}`}><Banknote size={24}/><span className="text-[10px] font-black mt-0.5">Cash</span></button>
+           <button onClick={() => setView('mymoney')} className={`absolute -top-20 w-16 h-16 rounded-full flex flex-col items-center justify-center text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] border-[3px] border-slate-900 transition-all active:scale-90 ${view === 'mymoney' ? 'bg-gradient-to-br from-emerald-400 to-indigo-600 scale-105' : 'bg-gradient-to-br from-emerald-500 to-indigo-700 opacity-90'}`}><Wallet size={22}/><span className="text-[9px] font-black mt-0.5 whitespace-nowrap">My Money</span></button>
         </div>
         <div className="flex justify-around w-full pb-2">
             <button onClick={() => setView('history')} className={`flex flex-col items-center gap-1 text-[10px] font-bold p-2 transition-all ${view === 'history' ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-slate-400'}`}><Calendar size={20}/> Storico</button>
@@ -650,8 +617,8 @@ const App: React.FC = () => {
       </nav>
 
       <div className="hidden md:flex fixed top-4 right-4 z-20 gap-2">
-         {['dashboard', 'operations', 'salary', 'history', 'settings'].map((v: any) => (
-           <button key={v} onClick={() => setView(v)} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${view === v ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'glass-button text-slate-300'}`}>{v === 'salary' ? 'Cash' : v === 'dashboard' ? 'Home' : v}</button>
+         {['dashboard', 'operations', 'mymoney', 'history', 'settings'].map((v: any) => (
+           <button key={v} onClick={() => setView(v)} className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${view === v ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'glass-button text-slate-300'}`}>{v === 'mymoney' ? 'My Money' : v === 'dashboard' ? 'Home' : v}</button>
          ))}
       </div>
       {sessionToDelete && (

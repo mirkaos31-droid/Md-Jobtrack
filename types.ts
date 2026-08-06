@@ -11,6 +11,38 @@ export interface WorkSession {
   tags: string[];
 }
 
+export type TransactionType = 'income' | 'expense';
+
+export type TransactionCategory = 
+  | 'stipendio' 
+  | 'extra_lavoro' 
+  | 'altre_entrate'
+  | 'casa_bollette' 
+  | 'spesa_cibo' 
+  | 'trasporti_auto' 
+  | 'svago_tempo_libero' 
+  | 'salute_benessere' 
+  | 'shopping' 
+  | 'risparmi_investimenti' 
+  | 'abbonamenti' 
+  | 'altro';
+
+export interface MoneyTransaction {
+  id: string;
+  date: string; // ISO string (YYYY-MM-DD)
+  amount: number;
+  type: TransactionType;
+  category: TransactionCategory | string;
+  title: string;
+  note?: string;
+  isRecurring?: boolean;
+}
+
+export interface CategoryBudget {
+  category: string;
+  limit: number;
+}
+
 export interface SalaryEntry {
   id: string;
   date: string; // ISO string (YYYY-MM-DD)
@@ -25,5 +57,6 @@ export interface UserSettings {
     satSun: number;
   };
   leaveBalances: Record<string, number>; // Dynamic keys like ord_2025, ord_2026, com_log, etc.
+  categoryBudgets?: Record<string, number>;
   logoUrl?: string;
 }
