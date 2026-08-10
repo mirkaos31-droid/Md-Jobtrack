@@ -69,7 +69,7 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
     return transactions.filter(t => t.date && t.date.startsWith(selectedMonth));
   }, [transactions, selectedMonth]);
 
-  // Statistics
+  // Statistics for currently selected month
   const { totalIncome, totalExpense, netBalance, categoryTotals, savingsRate } = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -96,6 +96,27 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
       savingsRate: rate
     };
   }, [monthlyTransactions]);
+
+  // Global cumulative statistics across ALL recorded months
+  const { globalIncome, globalExpense, globalBalance } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+
+    transactions.forEach(t => {
+      const val = Number(t.amount) || 0;
+      if (t.type === 'income') {
+        income += val;
+      } else {
+        expense += val;
+      }
+    });
+
+    return {
+      globalIncome: income,
+      globalExpense: expense,
+      globalBalance: income - expense
+    };
+  }, [transactions]);
 
   // Filtered transactions list
   const filteredTransactions = useMemo(() => {
@@ -157,37 +178,49 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
       {/* Header Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 md:p-8 text-white shadow-2xl border border-white/10">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute right-20 -top-10 w-36 h-36 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="absolute -left-10 -top-10 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-3">
-              <Wallet size={14} /> Portafoglio Personale
-            </div>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              My Money <Sparkles className="text-amber-400" size={24} />
+        <div className="relative z-10 flex flex-col space-y-5">
+          {/* Decentered small label on the left */}
+          <div className="flex items-center justify-start">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/20 text-indigo-300 text-[9px] font-bold uppercase tracking-widest shadow-sm opacity-90">
+              <Wallet size={11} className="text-indigo-400" /> Portafoglio Personale
+            </span>
+          </div>
+
+          {/* Centered Aggressive My Money Title */}
+          <div className="text-center py-1">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black uppercase tracking-wider bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(52,211,153,0.35)] inline-flex items-center justify-center gap-3">
+              MY MONEY <Sparkles className="text-amber-400 shrink-0 animate-pulse" size={32} />
             </h1>
-            <p className="text-sm text-slate-300 mt-1 max-w-md">
-              Gestisci entrate, uscite e spese fisse in un unico posto. Senza vincoli, 100% in locale sul tuo dispositivo.
-            </p>
+          </div>
+
+          {/* Total Cumulative Balance Summary (All Months - without entrate/uscite subrow) */}
+          <div className="flex flex-col items-center justify-center text-center p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md max-w-md mx-auto w-full shadow-inner">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1 flex items-center gap-1.5">
+              <DollarSign size={13} className="text-indigo-400" /> Saldo Totale Complessivo
+            </span>
+            <div className={`text-3xl sm:text-4xl font-black tracking-tight ${globalBalance >= 0 ? 'text-emerald-400 drop-shadow-[0_0_18px_rgba(52,211,153,0.4)]' : 'text-rose-400 drop-shadow-[0_0_18px_rgba(244,63,94,0.4)]'}`}>
+              {globalBalance >= 0 ? '+' : ''}{globalBalance.toFixed(2)} €
+            </div>
           </div>
 
           {/* Month Selector Control */}
-          <div className="flex items-center justify-between md:justify-end gap-3 bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/10">
+          <div className="flex items-center justify-between sm:justify-center gap-4 bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/10 max-w-md mx-auto w-full shadow-lg">
             <button 
               onClick={handlePrevMonth}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
               title="Mese Precedente"
             >
               <ChevronLeft size={18} />
             </button>
-            <div className="text-center px-3 min-w-[140px]">
-              <div className="text-xs text-slate-300 font-medium uppercase tracking-wider">Mese In Esame</div>
+            <div className="text-center px-4 min-w-[150px]">
+              <div className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Mese In Esame</div>
               <div className="text-base font-bold capitalize text-white">{monthLabel}</div>
             </div>
             <button 
               onClick={handleNextMonth}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
               title="Mese Successivo"
             >
               <ChevronRight size={18} />
@@ -451,9 +484,9 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
 
       {/* Add Transaction Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="glass-card bg-slate-900 rounded-3xl p-6 max-w-lg w-full border-2 border-slate-700 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-fadeIn pb-24 md:pb-8">
+          <div className="glass-card bg-slate-900 rounded-3xl p-5 sm:p-6 max-w-lg w-full border-2 border-slate-700 shadow-2xl my-auto max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
               <h3 className="text-xl font-black text-white flex items-center gap-2">
                 {modalType === 'income' ? (
                   <span className="text-emerald-400 flex items-center gap-2"><ArrowUpRight size={22} /> Nuova Entrata</span>
@@ -469,7 +502,7 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-1 pt-2 pb-4">
               {/* Type Switcher */}
               <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1 rounded-2xl border border-slate-700">
                 <button
@@ -577,7 +610,7 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
@@ -601,8 +634,8 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="glass-card bg-slate-900 rounded-3xl p-6 max-w-sm w-full border-2 border-slate-700 shadow-2xl space-y-4 text-center">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 pb-24 md:pb-8 animate-fadeIn">
+          <div className="glass-card bg-slate-900 rounded-3xl p-6 max-w-sm w-full border-2 border-slate-700 shadow-2xl space-y-4 text-center my-auto">
             <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 size={24} />
             </div>
