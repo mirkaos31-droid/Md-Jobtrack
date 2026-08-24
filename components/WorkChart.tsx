@@ -8,15 +8,15 @@ interface WorkChartProps {
   settings: UserSettings;
 }
 
-// Color palette matching App.tsx styling
+// Color palette with high contrast and distinct colors for every category
 const BASE_COLORS: Record<string, string> = {
-  work: '#334155',      // Slate-700 (Lavoro standard)
-  servizio: '#4338ca',  // Indigo-700 (Servizio)
-  com_log: '#db2777',   // Pink-600 (Com. Log.)
-  operation: '#059669', // Emerald-600 (Operazione)
-  lic_937: '#7e22ce',   // Purple-700 (Lic 937)
-  rec_fest: '#c2410c',  // Orange-700 (Rec Fest)
-  rec_comp: '#0d9488',  // Teal-600 (Rec Comp)
+  work: '#475569',      // Slate-600 (Lavoro standard - solido e distinto)
+  servizio: '#8b5cf6',  // Violet-500 (Servizio - viola vivace ben differenziato)
+  lic_937: '#d946ef',   // Fuchsia-500 (Lic 937 - fucsia/magenta acceso)
+  rec_fest: '#ea580c',  // Orange-600 (Rec Fest - arancione brillante)
+  rec_comp: '#10b981',  // Emerald-500 (Rec Comp - verde smeraldo)
+  com_log: '#f43f5e',   // Rose-500 (Com. Log. - rosso rosa intenso)
+  operation: '#eab308', // Amber-500 (Operazione - giallo ambra)
 };
 
 const BASE_LABELS: Record<string, string> = {
@@ -29,19 +29,39 @@ const BASE_LABELS: Record<string, string> = {
   rec_comp: 'Rec. Comp.',
 };
 
+// Distinct colors for each year of ordinary leave (Ord. 24, Ord. 25, Ord. 26, etc.)
+const YEAR_ORD_COLORS: Record<string, string> = {
+  'ord_2023': '#0f766e', // Teal-700
+  'ord_2024': '#0891b2', // Cyan-700
+  'ord_2025': '#06b6d4', // Bright Cyan-500 (Turchese / Cyan vivo per Ord. 25)
+  'ord_2026': '#2563eb', // Royal Blue-600 (Blu reale intenso per Ord. 26)
+  'ord_2027': '#38bdf8', // Sky Blue-400 (Azzurro cielo)
+  'ord_2028': '#60a5fa', // Blue-400
+  'ord_2029': '#818cf8', // Indigo-400
+  'ord_2030': '#a78bfa', // Purple-400
+};
+
+const FALLBACK_ORD_COLORS = [
+  '#06b6d4', // Cyan
+  '#2563eb', // Royal Blue
+  '#0284c7', // Sky Blue
+  '#14b8a6', // Teal
+  '#4f46e5', // Indigo
+  '#38bdf8', // Light Sky
+];
+
 const WorkChart: React.FC<WorkChartProps> = ({ sessions, settings }) => {
   // Generate dynamic colors and labels for ordinary leave based on settings
   const dynamicConfig = useMemo(() => {
     const colors = { ...BASE_COLORS };
     const labels = { ...BASE_LABELS };
     
-    // Assign blue/indigo shades to dynamically found 'ord_YYYY' keys
+    // Assign distinct, clear colors to dynamically found 'ord_YYYY' keys
     const ordKeys = Object.keys(settings.leaveBalances).filter(k => k.startsWith('ord_')).sort();
-    const ordColors = ['#2563eb', '#4f46e5', '#3b82f6', '#6366f1']; // Fallback colors
     
     ordKeys.forEach((key, index) => {
       const year = key.split('_')[1];
-      colors[key] = ordColors[index % ordColors.length];
+      colors[key] = YEAR_ORD_COLORS[key] || FALLBACK_ORD_COLORS[index % FALLBACK_ORD_COLORS.length];
       labels[key] = `Ord. ${year.slice(-2)}`;
     });
     

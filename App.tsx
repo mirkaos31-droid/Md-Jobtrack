@@ -224,7 +224,6 @@ const App: React.FC = () => {
   const earnedDays = DateService.calculateEarnedDays(sessions, settings);
   
   const currentYearNum = new Date().getFullYear();
-  const prevYearKey = `ord_${currentYearNum - 1}`;
 
   const ordinariaKeys = Object.keys(settings.leaveBalances)
     .filter(k => {
@@ -236,6 +235,17 @@ const App: React.FC = () => {
     })
     .sort((a, b) => a.localeCompare(b));
 
+  const settingsOrdKeys = Object.keys(settings.leaveBalances)
+    .filter(k => k.startsWith('ord_'))
+    .sort((a, b) => a.localeCompare(b));
+
+  const existingYears = settingsOrdKeys
+    .map(k => parseInt(k.split('_')[1]))
+    .filter(y => !isNaN(y));
+  const minExistingYear = existingYears.length > 0 ? Math.min(...existingYears) : currentYearNum;
+  const nextPastYearToAdd = minExistingYear <= currentYearNum ? minExistingYear - 1 : currentYearNum - 1;
+  const nextPastYearKey = `ord_${nextPastYearToAdd}`;
+
   const getTypeLabel = (type: string) => {
     if (type.startsWith('ord_')) return `Ord. ${type.split('_')[1].slice(-2)}`;
     const map: Record<string, string> = { work:'Lavoro', servizio:'Servizio', lic_937:'Lic. 937', rec_fest:'Rec. Fest.', com_log:'Com. Log.', rec_comp:'Rec. Comp.', operation:'Operazione' };
@@ -243,8 +253,22 @@ const App: React.FC = () => {
   };
 
   const getTypeColor = (type: string) => {
-    if (type.startsWith('ord_')) return 'text-blue-700 bg-blue-50 border-blue-200';
-    const map: Record<string, string> = { work:'text-slate-700 bg-slate-50 border-slate-200', servizio:'text-indigo-700 bg-indigo-50 border-indigo-200', lic_937:'text-purple-700 bg-purple-50 border-purple-200', rec_fest:'text-orange-700 bg-orange-50 border-orange-200', com_log:'text-pink-700 bg-pink-50 border-pink-200', rec_comp:'text-teal-700 bg-teal-50 border-teal-200', operation:'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    if (type.startsWith('ord_')) {
+      const year = type.split('_')[1];
+      if (year === '2025' || year === '25') return 'text-cyan-700 bg-cyan-50 border-cyan-200 dark:text-cyan-300 dark:bg-cyan-950/40 dark:border-cyan-800/40';
+      if (year === '2026' || year === '26') return 'text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-950/40 dark:border-blue-800/40';
+      if (year === '2024' || year === '24') return 'text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-300 dark:bg-teal-950/40 dark:border-teal-800/40';
+      return 'text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-300 dark:bg-sky-950/40 dark:border-sky-800/40';
+    }
+    const map: Record<string, string> = { 
+      work:'text-slate-700 bg-slate-100 border-slate-300 dark:text-slate-300 dark:bg-slate-800/60 dark:border-slate-700', 
+      servizio:'text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-300 dark:bg-violet-950/40 dark:border-violet-800/40', 
+      lic_937:'text-fuchsia-700 bg-fuchsia-50 border-fuchsia-200 dark:text-fuchsia-300 dark:bg-fuchsia-950/40 dark:border-fuchsia-800/40', 
+      rec_fest:'text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-300 dark:bg-orange-950/40 dark:border-orange-800/40', 
+      com_log:'text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-950/40 dark:border-rose-800/40', 
+      rec_comp:'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800/40', 
+      operation:'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-950/40 dark:border-amber-800/40' 
+    };
     return map[type] || 'text-slate-700';
   };
 
@@ -326,13 +350,20 @@ const App: React.FC = () => {
                   const initial = settings.leaveBalances[key] || 0;
                   const spent = usedLeave[key] || 0;
                   const balance = initial - spent;
-                  const colors = [
-                    'from-blue-600 to-blue-700 shadow-blue-200/50',
-                    'from-indigo-600 to-indigo-700 shadow-indigo-200/50',
-                    'from-cyan-600 to-cyan-700 shadow-cyan-200/50'
-                  ];
+                  const year = key.split('_')[1];
+                  let cardGradient = 'from-blue-600 to-blue-700 shadow-blue-200/50';
+                  if (year === '2025' || year === '25') {
+                    cardGradient = 'from-cyan-600 to-teal-700 shadow-cyan-200/50';
+                  } else if (year === '2026' || year === '26') {
+                    cardGradient = 'from-blue-600 to-indigo-700 shadow-blue-200/50';
+                  } else if (year === '2024' || year === '24') {
+                    cardGradient = 'from-teal-600 to-emerald-700 shadow-teal-200/50';
+                  } else {
+                    cardGradient = idx % 2 === 0 ? 'from-sky-600 to-blue-700 shadow-sky-200/50' : 'from-indigo-600 to-violet-700 shadow-indigo-200/50';
+                  }
+
                   return (
-                    <div key={key} className={`snap-center shrink-0 bg-gradient-to-br ${colors[idx % colors.length]} rounded-2xl shadow-md border border-white/10 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden`}>
+                    <div key={key} className={`snap-center shrink-0 bg-gradient-to-br ${cardGradient} rounded-2xl shadow-md border border-white/10 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden`}>
                       <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-2xl"></div>
                       <div className="flex items-center gap-2 mb-3">
                         <Palmtree size={18} className="text-white/70" />
@@ -567,19 +598,47 @@ const App: React.FC = () => {
              <section className="space-y-4">
                <h3 className="text-xs font-bold uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-700 pb-2">Bilanci Ferie</h3>
                <div className="grid grid-cols-2 gap-4">
-                 {ordinariaKeys.map(k => (
-                   <div key={k}>
-                     <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">{getTypeLabel(k)} (gg)</label>
-                     <input type="number" value={settings.leaveBalances[k]} onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, [k]: parseInt(e.target.value)||0}})} className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"/>
-                   </div>
-                 ))}
+                 {settingsOrdKeys.map(k => {
+                   const year = parseInt(k.split('_')[1]);
+                   const isPastYear = !isNaN(year) && year < currentYearNum;
+                   return (
+                     <div key={k} className="relative">
+                       <div className="flex items-center justify-between mb-1">
+                         <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 truncate">{getTypeLabel(k)} (gg)</label>
+                         {isPastYear && (
+                           <button
+                             type="button"
+                             onClick={() => {
+                               setSettings(prev => {
+                                 const nextBalances = { ...prev.leaveBalances };
+                                 delete nextBalances[k];
+                                 return { ...prev, leaveBalances: nextBalances };
+                               });
+                             }}
+                             title="Rimuovi questo anno"
+                             className="text-slate-400 hover:text-red-500 transition-colors p-0.5"
+                           >
+                             <Trash2 size={13}/>
+                           </button>
+                         )}
+                       </div>
+                       <input 
+                         type="number" 
+                         value={settings.leaveBalances[k] !== undefined ? settings.leaveBalances[k] : 0} 
+                         onChange={e => setSettings({...settings, leaveBalances: {...settings.leaveBalances, [k]: parseInt(e.target.value)||0}})} 
+                         className="w-full p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-cyan-500 transition-colors"
+                       />
+                     </div>
+                   );
+                 })}
                  
-                 {!settings.leaveBalances[prevYearKey] && (
+                 {settings.leaveBalances[nextPastYearKey] === undefined && (
                     <button 
-                        onClick={() => setSettings(prev => ({...prev, leaveBalances: {...prev.leaveBalances, [prevYearKey]: 0}}))} 
-                        className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-xl flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 font-bold text-xs hover:border-cyan-300 dark:hover:border-cyan-500/50 hover:text-cyan-500 transition-all p-3"
+                        type="button"
+                        onClick={() => setSettings(prev => ({...prev, leaveBalances: {...prev.leaveBalances, [nextPastYearKey]: 0}}))} 
+                        className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-xl flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 font-bold text-xs hover:border-cyan-300 dark:hover:border-cyan-500/50 hover:text-cyan-500 transition-all p-3 min-h-[58px]"
                     >
-                        <Plus size={16}/> Aggiungi Ord. {currentYearNum - 1}
+                        <Plus size={16}/> Aggiungi Ord. {nextPastYearToAdd}
                     </button>
                  )}
 
