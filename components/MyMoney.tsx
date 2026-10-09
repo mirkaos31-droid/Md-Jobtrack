@@ -174,128 +174,160 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
   const monthLabel = monthDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="space-y-6 pb-24 md:pb-8 animate-fadeIn">
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6 md:p-8 text-white shadow-2xl border border-white/10">
-        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -left-10 -top-10 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="space-y-5 pb-24 md:pb-8 animate-fadeIn">
+      {/* Compact Modern Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/80 p-4 sm:p-5 text-white shadow-xl border-2 border-indigo-500/40">
+        <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="absolute -left-8 -top-8 w-40 h-40 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none"></div>
 
-        <div className="relative z-10 flex flex-col space-y-5">
-          {/* Decentered small label on the left */}
-          <div className="flex items-center justify-start">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/20 text-indigo-300 text-[9px] font-bold uppercase tracking-widest shadow-sm opacity-90">
-              <Wallet size={11} className="text-indigo-400" /> Portafoglio Personale
+        <div className="relative z-10 flex flex-col space-y-3.5">
+          {/* Top Row: Balanced, Symmetrical Header */}
+          <div className="flex flex-col items-center justify-center text-center gap-1.5 border-b border-white/10 pb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-indigo-300 text-[11px] font-semibold tracking-wider shadow-sm">
+              <Wallet size={12} className="text-indigo-400 shrink-0" /> Portafoglio Personale
             </span>
-          </div>
 
-          {/* Centered Aggressive My Money Title */}
-          <div className="text-center py-1">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black uppercase tracking-wider bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(52,211,153,0.35)] inline-flex items-center justify-center gap-3">
-              MY MONEY <Sparkles className="text-amber-400 shrink-0 animate-pulse" size={32} />
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wider bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(52,211,153,0.35)] inline-flex items-center justify-center gap-2" style={{ fontFamily: "'Outfit', 'Plus Jakarta Sans', sans-serif" }}>
+              MY MONEY
             </h1>
           </div>
 
-          {/* Total Cumulative Balance Summary (All Months - without entrate/uscite subrow) */}
-          <div className="flex flex-col items-center justify-center text-center p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md max-w-md mx-auto w-full shadow-inner">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1 flex items-center gap-1.5">
-              <DollarSign size={13} className="text-indigo-400" /> Saldo Totale Complessivo
-            </span>
-            <div className={`text-3xl sm:text-4xl font-black tracking-tight ${globalBalance >= 0 ? 'text-emerald-400 drop-shadow-[0_0_18px_rgba(52,211,153,0.4)]' : 'text-rose-400 drop-shadow-[0_0_18px_rgba(244,63,94,0.4)]'}`}>
-              {globalBalance >= 0 ? '+' : ''}{globalBalance.toFixed(2)} €
+          {/* Cockpit: Saldo Complessivo (leggermente allargato, numeri sotto la scritta più grande) & Mese In Esame */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 sm:gap-3">
+            {/* Saldo Totale Complessivo - col-span-7 su desktop (più largo per far respirare il numero sotto l'etichetta) */}
+            <div className="md:col-span-7 flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 border-2 border-slate-700/90 shadow-inner">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-2">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                    globalBalance >= 0 
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' 
+                      : 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                  }`}>
+                    <DollarSign size={15} />
+                  </div>
+                  <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wide text-slate-200">
+                    Saldo Complessivo
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 shrink-0">
+                  Tutti i mesi
+                </span>
+              </div>
+              
+              {/* Numeri sotto la scritta, più grandi, chiari e con styling premium */}
+              <div className={`text-2xl sm:text-3xl font-black font-mono tracking-tight mt-0.5 ${
+                globalBalance >= 0 
+                  ? 'text-emerald-400 drop-shadow-[0_0_14px_rgba(52,211,153,0.35)]' 
+                  : 'text-rose-400 drop-shadow-[0_0_14px_rgba(244,63,94,0.35)]'
+              }`}>
+                {globalBalance >= 0 ? '+' : ''}{globalBalance.toFixed(2)} €
+              </div>
             </div>
-          </div>
 
-          {/* Month Selector Control */}
-          <div className="flex items-center justify-between sm:justify-center gap-4 bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/10 max-w-md mx-auto w-full shadow-lg">
-            <button 
-              onClick={handlePrevMonth}
-              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
-              title="Mese Precedente"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <div className="text-center px-4 min-w-[150px]">
-              <div className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Mese In Esame</div>
-              <div className="text-base font-bold capitalize text-white">{monthLabel}</div>
+            {/* Mese In Esame - col-span-5 su desktop (compatto, font ultra-moderno) */}
+            <div className="md:col-span-5 flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/80 border-2 border-slate-700/90 shadow-inner">
+              <button 
+                onClick={handlePrevMonth}
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-600 transition-all flex items-center justify-center shadow-sm shrink-0"
+                title="Mese Precedente"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              <div className="text-center px-2 flex-1 min-w-0">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate mb-0.5">Mese In Esame</div>
+                <div 
+                  className="text-sm sm:text-base font-bold capitalize text-white tracking-wide flex items-center justify-center gap-1.5 truncate"
+                  style={{ fontFamily: "'Plus Jakarta Sans', 'Outfit', sans-serif" }}
+                >
+                  <Calendar size={14} className="text-cyan-400 shrink-0" />
+                  <span className="truncate">{monthLabel}</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleNextMonth}
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-600 transition-all flex items-center justify-center shadow-sm shrink-0"
+                title="Mese Successivo"
+              >
+                <ChevronRight size={16} />
+              </button>
             </div>
-            <button 
-              onClick={handleNextMonth}
-              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all"
-              title="Mese Successivo"
-            >
-              <ChevronRight size={18} />
-            </button>
           </div>
         </div>
       </div>
 
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      {/* KPI Stats Grid - Contorni Solidi ad Alto Impatto */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {/* Net Balance */}
-        <div className={`rounded-3xl p-5 border-2 transition-all glass-card ${
+        <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-5 border-2 transition-all bg-slate-900 shadow-md ${
           netBalance >= 0 
-            ? 'bg-gradient-to-br from-emerald-950/40 via-slate-900/90 to-slate-900 border-emerald-500/30 shadow-[0_0_25px_rgba(16,185,129,0.15)]' 
-            : 'bg-gradient-to-br from-rose-950/40 via-slate-900/90 to-slate-900 border-rose-500/30 shadow-[0_0_25px_rgba(244,63,94,0.15)]'
+            ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.18)]' 
+            : 'border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.18)]'
         }`}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Saldo Netto</span>
-            <div className={`p-2 rounded-xl ${netBalance >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Saldo Netto</span>
+            <div className={`p-2 rounded-xl border ${
+              netBalance >= 0 
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                : 'bg-rose-500/20 border-rose-500/50 text-rose-400'
+            }`}>
               <Wallet size={18} />
             </div>
           </div>
           <div className={`text-2xl md:text-3xl font-black tracking-tight ${netBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {netBalance >= 0 ? '+' : ''}{netBalance.toFixed(2)} €
           </div>
-          <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+          <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-1 font-medium">
             {netBalance >= 0 ? <TrendingUp size={12} className="text-emerald-400" /> : <TrendingDown size={12} className="text-rose-400" />}
             <span>{netBalance >= 0 ? 'Attivo del mese' : 'Disavanzo del mese'}</span>
           </div>
         </div>
 
         {/* Total Income */}
-        <div className="rounded-3xl p-5 bg-slate-900/80 border-2 border-emerald-500/20 glass-card">
+        <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-slate-900 border-2 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)] shadow-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Entrate</span>
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Entrate</span>
+            <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/50 text-emerald-400">
               <ArrowUpRight size={18} />
             </div>
           </div>
           <div className="text-2xl md:text-3xl font-black tracking-tight text-emerald-400">
             +{totalIncome.toFixed(2)} €
           </div>
-          <div className="text-[11px] text-slate-400 mt-2">
+          <div className="text-[11px] text-slate-400 mt-2 font-medium">
             Stipendi, extra e incassi
           </div>
         </div>
 
         {/* Total Expense */}
-        <div className="rounded-3xl p-5 bg-slate-900/80 border-2 border-rose-500/20 glass-card">
+        <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-slate-900 border-2 border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] shadow-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Uscite</span>
-            <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Uscite</span>
+            <div className="p-2 rounded-xl bg-rose-500/20 border border-rose-500/50 text-rose-400">
               <ArrowDownRight size={18} />
             </div>
           </div>
           <div className="text-2xl md:text-3xl font-black tracking-tight text-rose-400">
             -{totalExpense.toFixed(2)} €
           </div>
-          <div className="text-[11px] text-slate-400 mt-2">
+          <div className="text-[11px] text-slate-400 mt-2 font-medium">
             Spese fisse e variabili
           </div>
         </div>
 
         {/* Savings Rate */}
-        <div className="rounded-3xl p-5 bg-slate-900/80 border-2 border-amber-500/20 glass-card">
+        <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-slate-900 border-2 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)] shadow-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Risparmiato</span>
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Risparmiato</span>
+            <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-400">
               <PieChart size={18} />
             </div>
           </div>
           <div className="text-2xl md:text-3xl font-black tracking-tight text-amber-400">
             {savingsRate}%
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
+          <div className="w-full bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden border border-slate-700/60">
             <div 
               className="bg-amber-400 h-full rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, Math.max(0, savingsRate))}%` }}
@@ -304,28 +336,32 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
         </div>
       </div>
 
-      {/* Quick Action Buttons */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Quick Action Buttons - Nuova Grafica con Contorni Solidi e Stile Moderno */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <button
           onClick={() => handleOpenAddModal('income')}
-          className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-lg shadow-emerald-900/30 active:scale-95"
+          className="group relative overflow-hidden flex items-center justify-center gap-2.5 sm:gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-xs sm:text-sm uppercase tracking-wider transition-all border-2 border-emerald-400 shadow-[0_4px_20px_rgba(16,185,129,0.3)] active:scale-[0.98]"
         >
-          <Plus size={20} />
-          <span>+ Aggiungi Entrata</span>
+          <div className="p-1.5 rounded-xl bg-white/20 border border-white/30 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Plus size={18} className="stroke-[3]" />
+          </div>
+          <span>Aggiungi Entrata</span>
         </button>
 
         <button
           onClick={() => handleOpenAddModal('expense')}
-          className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all shadow-lg shadow-rose-900/30 active:scale-95"
+          className="group relative overflow-hidden flex items-center justify-center gap-2.5 sm:gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-600 via-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs sm:text-sm uppercase tracking-wider transition-all border-2 border-rose-400 shadow-[0_4px_20px_rgba(244,63,94,0.3)] active:scale-[0.98]"
         >
-          <Plus size={20} />
-          <span>- Aggiungi Spesa</span>
+          <div className="p-1.5 rounded-xl bg-white/20 border border-white/30 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Plus size={18} className="stroke-[3]" />
+          </div>
+          <span>Aggiungi Spesa</span>
         </button>
       </div>
 
-      {/* Category Breakdown Progress Bars (If Expenses Exist) */}
+      {/* Category Breakdown Progress Bars (If Expenses Exist) - Contorni Solidi */}
       {Object.keys(categoryTotals).length > 0 && (
-        <div className="glass-card bg-slate-900/90 rounded-3xl p-6 border-2 border-indigo-500/20 space-y-4">
+        <div className="bg-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-6 border-2 border-indigo-500 space-y-4 shadow-md">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm uppercase tracking-wider">
               <Layers size={18} /> Ripartizione Spese per Categoria
@@ -361,8 +397,8 @@ export const MyMoney: React.FC<MyMoneyProps> = ({ transactions, onSaveTransactio
         </div>
       )}
 
-      {/* Transactions List Section */}
-      <div className="glass-card bg-slate-900/90 rounded-3xl p-6 border-2 border-slate-800 space-y-5">
+      {/* Transactions List Section - Contorno Solido */}
+      <div className="bg-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-6 border-2 border-slate-700 space-y-5 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div>
             <h3 className="font-bold text-slate-100 text-lg flex items-center gap-2">

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
+import { Plus, Save, Clock, Calendar, BarChart2, Settings, Sparkles, Trash2, Info, Briefcase, Palmtree, Award, RotateCcw, BatteryCharging, FileText, Upload, Image as ImageIcon, MapPin, UserCheck, Pencil, X, ArrowRight, Check, Loader2, Banknote, Wallet, ChevronDown, ChevronRight, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { WorkSession, UserSettings, SessionType, MoneyTransaction } from './types';
 import * as Storage from './services/storageService';
 import * as DateService from './services/dateService';
@@ -252,6 +252,180 @@ const App: React.FC = () => {
     return map[type] || type;
   };
 
+  const summaryCards = useMemo(() => {
+    const list: Array<{
+      key: string;
+      label: string;
+      icon: React.ComponentType<{ size?: number; className?: string }>;
+      unit: string;
+      balance: number;
+      initial: number;
+      earned?: number;
+      subtitle: string;
+      borderClass: string;
+      badgeClass: string;
+      numClass: string;
+      isZero: boolean;
+      sortOrder: number;
+    }> = [];
+
+    // 1. Ordinarie
+    const ordKeys = Object.keys(settings.leaveBalances)
+      .filter(k => {
+        if (!k.startsWith('ord_')) return false;
+        const year = parseInt(k.split('_')[1]);
+        const initial = settings.leaveBalances[k] || 0;
+        const spent = usedLeave[k] || 0;
+        return initial > 0 || spent > 0 || year >= currentYearNum;
+      })
+      .sort((a, b) => a.localeCompare(b));
+
+    ordKeys.forEach((k, idx) => {
+      const initial = settings.leaveBalances[k] || 0;
+      const spent = usedLeave[k] || 0;
+      const balance = Math.max(0, initial - spent);
+      const isZero = balance <= 0;
+      const year = k.split('_')[1];
+
+      let borderClass = 'border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.2)]';
+      let badgeClass = 'bg-cyan-500/20 border-cyan-400/40 text-cyan-400';
+      let numClass = 'text-cyan-300';
+
+      if (year === '2026' || year === '26') {
+        borderClass = 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]';
+        badgeClass = 'bg-blue-500/20 border-blue-400/40 text-blue-400';
+        numClass = 'text-blue-300';
+      } else if (year === '2024' || year === '24') {
+        borderClass = 'border-teal-500 shadow-[0_0_15px_rgba(20,184,166,0.2)]';
+        badgeClass = 'bg-teal-500/20 border-teal-400/40 text-teal-400';
+        numClass = 'text-teal-300';
+      } else if (year !== '2025' && year !== '25') {
+        borderClass = 'border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.2)]';
+        badgeClass = 'bg-sky-500/20 border-sky-400/40 text-sky-400';
+        numClass = 'text-sky-300';
+      }
+
+      list.push({
+        key: k,
+        label: getTypeLabel(k),
+        icon: Palmtree,
+        unit: 'gg',
+        balance,
+        initial,
+        subtitle: isZero ? `0 su ${initial} gg` : `Su ${initial} gg`,
+        borderClass,
+        badgeClass,
+        numClass,
+        isZero,
+        sortOrder: 10 + idx
+      });
+    });
+
+    // 2. Lic. 937
+    const licInitial = settings.leaveBalances.lic_937 || 0;
+    const licSpent = usedLeave.lic_937 || 0;
+    const licBalance = Math.max(0, licInitial - licSpent);
+    const licZero = licBalance <= 0;
+    list.push({
+      key: 'lic_937',
+      label: 'Lic. 937',
+      icon: Award,
+      unit: 'gg',
+      balance: licBalance,
+      initial: licInitial,
+      subtitle: licZero ? `0 su ${licInitial} gg` : `Su ${licInitial} gg`,
+      borderClass: 'border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.2)]',
+      badgeClass: 'bg-fuchsia-500/20 border-fuchsia-400/40 text-fuchsia-400',
+      numClass: 'text-fuchsia-300',
+      isZero: licZero,
+      sortOrder: 30
+    });
+
+    // 3. Rec. Fest.
+    const recFestInitial = settings.leaveBalances.rec_fest || 0;
+    const recFestEarned = earnedDays.rec_fest || 0;
+    const recFestSpent = usedLeave.rec_fest || 0;
+    const recFestBalance = Math.max(0, recFestInitial + recFestEarned - recFestSpent);
+    const recFestZero = recFestBalance <= 0;
+    list.push({
+      key: 'rec_fest',
+      label: 'Rec. Fest.',
+      icon: RotateCcw,
+      unit: 'gg',
+      balance: recFestBalance,
+      initial: recFestInitial,
+      earned: recFestEarned,
+      subtitle: recFestEarned > 0 ? `+${recFestEarned} mat. / Iniz. ${recFestInitial}` : (recFestZero ? `0 su ${recFestInitial} gg` : `Mat. + Iniziale`),
+      borderClass: 'border-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.2)]',
+      badgeClass: 'bg-orange-500/20 border-orange-400/40 text-orange-400',
+      numClass: 'text-orange-300',
+      isZero: recFestZero,
+      sortOrder: 40
+    });
+
+    // 4. Com. Log.
+    const comLogInitial = settings.leaveBalances.com_log || 0;
+    const comLogEarned = earnedDays.com_log || 0;
+    const comLogSpent = usedLeave.com_log || 0;
+    const comLogBalance = Math.max(0, comLogInitial + comLogEarned - comLogSpent);
+    const comLogZero = comLogBalance <= 0;
+    list.push({
+      key: 'com_log',
+      label: 'Com. Log.',
+      icon: MapPin,
+      unit: 'h',
+      balance: comLogBalance,
+      initial: comLogInitial,
+      earned: comLogEarned,
+      subtitle: comLogEarned > 0 ? `+${comLogEarned} mat. / Iniz. ${comLogInitial}` : (comLogZero ? `0 su ${comLogInitial} h` : `Su ${comLogInitial} h`),
+      borderClass: 'border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.2)]',
+      badgeClass: 'bg-rose-500/20 border-rose-400/40 text-rose-400',
+      numClass: 'text-rose-300',
+      isZero: comLogZero,
+      sortOrder: 50
+    });
+
+    // 5. Rec. Comp. (if configured)
+    const recCompInitial = settings.leaveBalances.rec_comp || 0;
+    const recCompSpent = usedLeave.rec_comp || 0;
+    if (recCompInitial > 0 || recCompSpent > 0) {
+      const recCompBalance = Math.max(0, recCompInitial - recCompSpent);
+      const recCompZero = recCompBalance <= 0;
+      list.push({
+        key: 'rec_comp',
+        label: 'Rec. Comp.',
+        icon: Clock,
+        unit: 'h',
+        balance: recCompBalance,
+        initial: recCompInitial,
+        subtitle: recCompZero ? `0 su ${recCompInitial} h` : `Su ${recCompInitial} h`,
+        borderClass: 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
+        badgeClass: 'bg-emerald-500/20 border-emerald-400/40 text-emerald-400',
+        numClass: 'text-emerald-300',
+        isZero: recCompZero,
+        sortOrder: 60
+      });
+    }
+
+    return list;
+  }, [settings.leaveBalances, usedLeave, earnedDays, currentYearNum]);
+
+  const activeSummaryCards = useMemo(() => {
+    return summaryCards
+      .filter(c => !c.isZero)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [summaryCards]);
+
+  const zeroSummaryCards = useMemo(() => {
+    return summaryCards
+      .filter(c => c.isZero)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [summaryCards]);
+
+  const displayedSummaryCards = useMemo(() => {
+    return [...activeSummaryCards, ...zeroSummaryCards];
+  }, [activeSummaryCards, zeroSummaryCards]);
+
   const getTypeColor = (type: string) => {
     if (type.startsWith('ord_')) {
       const year = type.split('_')[1];
@@ -344,72 +518,149 @@ const App: React.FC = () => {
       <main className="max-w-3xl mx-auto p-4 space-y-6 relative z-10">
         {view === 'dashboard' && (
           <>
-            <div className="overflow-x-auto pb-6 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory">
-              <div className="flex gap-3">
-                {ordinariaKeys.map((key, idx) => {
-                  const initial = settings.leaveBalances[key] || 0;
-                  const spent = usedLeave[key] || 0;
-                  const balance = initial - spent;
-                  const year = key.split('_')[1];
-                  let cardGradient = 'from-blue-600 to-blue-700 shadow-blue-200/50';
-                  if (year === '2025' || year === '25') {
-                    cardGradient = 'from-cyan-600 to-teal-700 shadow-cyan-200/50';
-                  } else if (year === '2026' || year === '26') {
-                    cardGradient = 'from-blue-600 to-indigo-700 shadow-blue-200/50';
-                  } else if (year === '2024' || year === '24') {
-                    cardGradient = 'from-teal-600 to-emerald-700 shadow-teal-200/50';
-                  } else {
-                    cardGradient = idx % 2 === 0 ? 'from-sky-600 to-blue-700 shadow-sky-200/50' : 'from-indigo-600 to-violet-700 shadow-indigo-200/50';
-                  }
+            {/* Dynamic Leave Balances Carousel: Minimal, Compact & Automatic */}
+            <div className="overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory">
+              <div className="flex gap-2.5 items-stretch py-0.5">
+                {displayedSummaryCards.map((card, idx) => {
+                  const IconComponent = card.icon;
+                  const isFirstZero = card.isZero && (!displayedSummaryCards[idx - 1] || !displayedSummaryCards[idx - 1].isZero);
 
                   return (
-                    <div key={key} className={`snap-center shrink-0 bg-gradient-to-br ${cardGradient} rounded-2xl shadow-md border border-white/10 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden`}>
-                      <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-2xl"></div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Palmtree size={18} className="text-white/70" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">{getTypeLabel(key)}</span>
-                      </div>
-                      <div className="relative z-10">
-                        <div className="text-2xl font-bold">{balance.toFixed(0)} <span className="text-sm opacity-80 font-medium">gg</span></div>
-                        <div className="text-[10px] opacity-70">Su {initial} gg</div>
-                      </div>
-                    </div>
+                    <React.Fragment key={card.key}>
+                      {/* Subtle thin separator when zeroed cards begin */}
+                      {isFirstZero && activeSummaryCards.length > 0 && (
+                        <div className="shrink-0 flex items-center px-0.5">
+                          <div className="w-[1px] h-10 bg-slate-800" />
+                        </div>
+                      )}
+
+                      {card.isZero ? (
+                        /* Zeroed / Exhausted Card (automatically shifted to right, minimal & compact) */
+                        <div 
+                          className="snap-center shrink-0 rounded-xl px-3 py-2 w-28 bg-slate-900/40 border border-slate-800 flex flex-col justify-between text-white relative transition-all duration-200 opacity-50 hover:opacity-90"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate" style={{ fontFamily: "'Plus Jakarta Sans', 'Outfit', sans-serif" }}>
+                              {card.label}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-600">
+                              0
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-lg font-extrabold font-mono tracking-tight text-slate-500">
+                              0 <span className="text-[10px] font-semibold text-slate-600">{card.unit}</span>
+                            </div>
+                            <div className="text-[9px] text-slate-600 truncate mt-0.5 font-medium">
+                              {card.subtitle}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Active Card: Compact, solid contour, vibrant */
+                        <div 
+                          className={`snap-center shrink-0 rounded-xl px-3 py-2 w-28 bg-slate-900 border-2 ${card.borderClass} flex flex-col justify-between text-white relative transition-all duration-200 hover:scale-[1.02] shadow-sm`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 truncate" style={{ fontFamily: "'Plus Jakarta Sans', 'Outfit', sans-serif" }}>
+                              {card.label}
+                            </span>
+                            <div className={`p-1 rounded-md border ${card.badgeClass}`}>
+                              <IconComponent size={12} />
+                            </div>
+                          </div>
+                          <div>
+                            <div className={`text-xl font-black font-mono tracking-tight leading-none ${card.numClass}`}>
+                              {card.balance.toFixed(0)} <span className="text-[11px] font-semibold opacity-70">{card.unit}</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400 font-medium truncate mt-1">
+                              {card.subtitle}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </React.Fragment>
                   );
                 })}
-
-                <div className="snap-center shrink-0 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl shadow-md shadow-purple-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
-                  <div className="flex items-center gap-2 mb-3"><Award size={18}/><span className="text-[10px] font-bold uppercase">Lic. 937</span></div>
-                  <div><div className="text-2xl font-bold">{((settings.leaveBalances.lic_937 || 0) - (usedLeave.lic_937 || 0)).toFixed(0)} <span className="text-sm opacity-80">gg</span></div></div>
-                </div>
-
-                <div className="snap-center shrink-0 bg-gradient-to-br from-orange-600 to-orange-700 rounded-2xl shadow-md shadow-orange-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
-                  <div className="flex items-center gap-2 mb-3"><RotateCcw size={18}/><span className="text-[10px] font-bold uppercase">Rec. Fest.</span></div>
-                  <div><div className="text-2xl font-bold">{((settings.leaveBalances.rec_fest || 0) + (earnedDays.rec_fest || 0) - (usedLeave.rec_fest || 0)).toFixed(0)} <span className="text-sm opacity-80">gg</span></div></div>
-                </div>
-
-                <div className="snap-center shrink-0 bg-gradient-to-br from-pink-600 to-pink-700 rounded-2xl shadow-md shadow-pink-200/50 p-4 w-32 md:w-36 flex flex-col justify-between text-white relative overflow-hidden">
-                  <div className="flex items-center gap-2 mb-3"><MapPin size={18}/><span className="text-[10px] font-bold uppercase">Com. Log.</span></div>
-                  <div><div className="text-2xl font-bold">{((settings.leaveBalances.com_log || 0) + (earnedDays.com_log || 0) - (usedLeave.com_log || 0)).toFixed(0)} <span className="text-sm opacity-80">h</span></div>
-                  <div className="text-[10px] opacity-70">Su {settings.leaveBalances.com_log || 0} h</div></div>
-                </div>
-
               </div>
             </div>
 
-            <div className={`bg-white rounded-2xl p-6 flex flex-col items-center justify-center text-center border-2 transition-all duration-300 glass-card border-none text-white ${totalBalance >= 0 ? 'shadow-[0_0_20px_rgba(74,222,128,0.2)] bg-green-500/10' : 'shadow-[0_0_20px_rgba(248,113,113,0.2)] bg-red-500/10'}`}>
-               <div className={`flex items-center gap-2 mb-2 ${totalBalance >= 0 ? 'text-green-300' : 'text-red-300'}`}><Briefcase size={20}/><span className="text-sm font-bold uppercase tracking-widest">Monte Ore</span></div>
-               <div className={`text-5xl font-black tracking-tight ${totalBalance >= 0 ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.4)]' : 'text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.4)]'}`}>{totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)}h</div>
+            {/* Monte Ore Card: Modern, Compact with Solid Contours & Large Numbers */}
+            <div className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-slate-900 p-4 sm:p-5 text-white border-2 transition-all ${
+              totalBalance >= 0 
+                ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.22)]' 
+                : 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.22)]'
+            }`}>
+              <div className={`absolute -right-8 -bottom-8 w-40 h-40 rounded-full blur-2xl pointer-events-none ${
+                totalBalance >= 0 ? 'bg-emerald-500/10' : 'bg-rose-500/10'
+              }`}></div>
+              
+              <div className="relative z-10 flex flex-col justify-between">
+                {/* Header Row */}
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                      totalBalance >= 0 
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' 
+                        : 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                    }`}>
+                      <Briefcase size={15} />
+                    </div>
+                    <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wide text-slate-200" style={{ fontFamily: "'Outfit', 'Plus Jakarta Sans', sans-serif" }}>
+                      Monte Ore
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border shrink-0 ${
+                    totalBalance >= 0 
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' 
+                      : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                  }`}>
+                    {totalBalance >= 0 ? 'Attivo' : 'Disavanzo'}
+                  </span>
+                </div>
+                
+                {/* Big numbers below the label */}
+                <div className={`text-3xl sm:text-4xl font-black font-mono tracking-tight my-0.5 ${
+                  totalBalance >= 0 
+                    ? 'text-emerald-400 drop-shadow-[0_0_14px_rgba(52,211,153,0.35)]' 
+                    : 'text-rose-400 drop-shadow-[0_0_14px_rgba(244,63,94,0.35)]'
+                }`}>
+                  {totalBalance > 0 ? '+' : ''}{totalBalance.toFixed(2)} h
+                </div>
+                
+                {/* Info subtitle */}
+                <div className="text-[11px] text-slate-400 mt-1 font-medium">
+                  Bilancio orario cumulativo rispetto al debito di servizio
+                </div>
+              </div>
             </div>
 
-            <div className="glass-card rounded-3xl p-6 space-y-5 border-2 border-blue-400/30 shadow-[0_0_20px_rgba(96,165,250,0.15)] transition-all duration-300">
-              <div className="flex items-center gap-3 border-b border-slate-700/50 pb-4">
-                <div className="bg-blue-500/20 text-blue-400 p-2 rounded-xl border border-blue-500/30"><Plus size={20}/></div>
-                <h3 className="font-bold text-slate-200">Nuova Registrazione</h3>
+            {/* Nuova Registrazione Card: Solid Contours, Sleek Form & Matching Button */}
+            <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border-2 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.18)] p-4 sm:p-5 text-white space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border bg-indigo-500/20 border-indigo-400/40 text-indigo-300">
+                    <Plus size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-xs sm:text-sm uppercase tracking-wide text-slate-100" style={{ fontFamily: "'Outfit', 'Plus Jakarta Sans', sans-serif" }}>
+                      Nuova Registrazione
+                    </h3>
+                  </div>
+                </div>
+                <span className="text-[10px] font-semibold text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded-md border border-indigo-400/30">
+                  Inserimento rapido
+                </span>
               </div>
-              <div className="space-y-4">
+
+              <div className="space-y-3.5">
                 <div className="min-w-0">
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Tipo Attività</label>
-                  <select value={entryType} onChange={e => setEntryType(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:border-blue-500 focus:bg-white outline-none appearance-none transition-colors">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 truncate">Tipo Attività</label>
+                  <select 
+                    value={entryType} 
+                    onChange={e => setEntryType(e.target.value as SessionType)} 
+                    className="w-full min-w-0 p-2.5 sm:p-3 bg-slate-950/80 border-2 border-slate-700/90 rounded-xl text-sm font-semibold text-white focus:border-indigo-400 outline-none appearance-none transition-colors"
+                  >
                     <option value="work">💼 Lavoro</option>
                     <option value="com_log">📍 Com. Log.</option>
                     {ordinariaKeys.map(k => <option key={k} value={k}>🌴 {getTypeLabel(k)}</option>)}
@@ -418,37 +669,96 @@ const App: React.FC = () => {
                     <option value="rec_comp">⚡ Rec. Compensativo</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="min-w-0">
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Data</label>
-                    <input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 truncate">Data</label>
+                    <input 
+                      type="date" 
+                      value={entryDate} 
+                      onChange={e => setEntryDate(e.target.value)} 
+                      className="w-full min-w-0 p-2.5 sm:p-3 bg-slate-950/80 border-2 border-slate-700/90 rounded-xl text-sm font-semibold text-white outline-none focus:border-indigo-400 transition-colors"
+                    />
                   </div>
                   {(entryType === 'work' || entryType === 'com_log') ? (
-                    <div className="flex gap-3 min-w-0">
+                    <div className="flex gap-2.5 min-w-0">
                       <div className="flex-1 min-w-0">
-                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Inizio</label>
-                        <input type="time" value={entryStart} onChange={e => setEntryStart(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 truncate">Inizio</label>
+                        <input 
+                          type="time" 
+                          value={entryStart} 
+                          onChange={e => setEntryStart(e.target.value)} 
+                          className="w-full min-w-0 p-2.5 sm:p-3 bg-slate-950/80 border-2 border-slate-700/90 rounded-xl text-sm font-bold text-white outline-none focus:border-indigo-400 transition-colors text-center"
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 truncate">Fine</label>
-                        <input type="time" value={entryEnd} onChange={e => setEntryEnd(e.target.value)} className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors text-center"/>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 truncate">Fine</label>
+                        <input 
+                          type="time" 
+                          value={entryEnd} 
+                          onChange={e => setEntryEnd(e.target.value)} 
+                          className="w-full min-w-0 p-2.5 sm:p-3 bg-slate-950/80 border-2 border-slate-700/90 rounded-xl text-sm font-bold text-white outline-none focus:border-indigo-400 transition-colors text-center"
+                        />
                       </div>
                     </div>
                   ) : (
                     <div className="min-w-0">
-                      <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 opacity-0 hidden sm:block">Durata</label>
-                      <div className="flex h-[44px] sm:h-[52px] items-center justify-center text-sm font-bold text-blue-600 bg-blue-50 border-2 border-blue-100 rounded-xl px-4 truncate">Intera Giornata</div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 opacity-0 hidden sm:block">Durata</label>
+                      <div className="flex h-[42px] sm:h-[46px] items-center justify-center text-xs sm:text-sm font-bold text-indigo-300 bg-indigo-500/15 border-2 border-indigo-500/40 rounded-xl px-4 truncate">
+                        Intera Giornata
+                      </div>
                     </div>
                   )}
                 </div>
-                <input type="text" value={entryActivity} onChange={e => setEntryActivity(e.target.value)} placeholder="Cosa hai fatto oggi?" className="w-full min-w-0 p-2.5 sm:p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors"/>
-                <button onClick={handleAddManualSession} disabled={saveStatus !== 'idle'} className={`w-full py-4 rounded-2xl text-white font-bold transition-all shadow-lg ${saveStatus === 'success' ? 'bg-green-500' : 'bg-blue-600 active:scale-95 shadow-blue-200'}`}>
-                  {saveStatus === 'saving' ? <Loader2 className="animate-spin mx-auto"/> : saveStatus === 'success' ? <Check className="mx-auto"/> : 'Salva Registrazione'}
+
+                <div className="min-w-0">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 truncate">Note / Attività</label>
+                  <input 
+                    type="text" 
+                    value={entryActivity} 
+                    onChange={e => setEntryActivity(e.target.value)} 
+                    placeholder="Cosa hai fatto oggi?" 
+                    className="w-full min-w-0 p-2.5 sm:p-3 bg-slate-950/80 border-2 border-slate-700/90 rounded-xl text-sm font-medium text-white placeholder-slate-500 outline-none focus:border-indigo-400 transition-colors"
+                  />
+                </div>
+
+                <button 
+                  onClick={handleAddManualSession} 
+                  disabled={saveStatus !== 'idle'} 
+                  className={`w-full py-3.5 rounded-xl font-bold uppercase tracking-wider text-xs sm:text-sm transition-all shadow-lg active:scale-[0.98] border border-indigo-400/30 flex items-center justify-center gap-2 ${
+                    saveStatus === 'success' 
+                      ? 'bg-emerald-500 text-white shadow-emerald-500/30' 
+                      : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_0_18px_rgba(99,102,241,0.25)]'
+                  }`}
+                >
+                  {saveStatus === 'saving' ? (
+                    <><Loader2 size={16} className="animate-spin" /> Salvataggio in corso...</>
+                  ) : saveStatus === 'success' ? (
+                    <><Check size={16} /> Registrazione Salvata!</>
+                  ) : (
+                    <><Save size={16} /> Salva Registrazione</>
+                  )}
                 </button>
               </div>
             </div>
 
-            <div className="glass-card bg-white dark:bg-slate-800/80 rounded-3xl p-6 border-2 border-yellow-400 dark:border-yellow-500/30 shadow-[0_0_20px_rgba(250,204,21,0.4)] dark:shadow-[0_0_20px_rgba(250,204,21,0.2)] transition-all duration-300"><WorkChart sessions={sessions} settings={settings}/></div>
+            {/* Andamento Ore Card: Solid Contours & Modern Header */}
+            <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border-2 border-indigo-500/40 shadow-[0_0_20px_rgba(99,102,241,0.18)] p-4 sm:p-5 text-white transition-all">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border bg-indigo-500/20 border-indigo-400/40 text-indigo-300">
+                    <BarChart2 size={15} />
+                  </div>
+                  <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wide text-slate-200" style={{ fontFamily: "'Outfit', 'Plus Jakarta Sans', sans-serif" }}>
+                    Andamento Ore & Attività
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 shrink-0">
+                  Ultimi 7 Giorni
+                </span>
+              </div>
+              <WorkChart sessions={sessions} settings={settings}/>
+            </div>
           </>
         )}
 
